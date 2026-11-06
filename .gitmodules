@@ -1,0 +1,5 @@
+[submodule "upstream"]
+	path = upstream
+	url = https://github.com/Kvan7/Exiled-Exchange-2.git
+	branch = master
+	shallow = true
