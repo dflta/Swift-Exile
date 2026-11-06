@@ -1,0 +1,60 @@
+# --- Local context: planning docs and AI assistant files (never published) ---
+docs/
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.cursor/
+.aider*
+*.local.md
+
+# --- Auth data and secrets ---
+.env
+.env.*
+.netrc
+.git-credentials
+secrets/
+*.secret
+*.secrets
+# signing certificates, keys, provisioning
+*.p12
+*.pfx
+*.cer
+*.certSigningRequest
+*.pem
+*.key
+*.p8
+AuthKey_*.p8
+*.keychain
+*.keychain-db
+*.mobileprovision
+*.provisionprofile
+# Sparkle EdDSA private key / notarization credentials
+*eddsa*priv*
+*ed25519*priv*
+sparkle_private_key*
+notary*.json
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- Xcode / SwiftPM ---
+build/
+DerivedData/
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+*.xcodeproj/
+*.xcworkspace/
+!Package.xcworkspace/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# --- Node (renderer build tooling) ---
+node_modules/
+npm-debug.log*
