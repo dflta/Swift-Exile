@@ -21,7 +21,11 @@ EXPECTED_DR="$ROOT/Resources/designated-requirement.txt"
 WORK="$(mktemp -d)"
 KEYCHAIN="$WORK/signing.keychain-db"
 KEYCHAIN_PASSWORD="$(/usr/bin/openssl rand -base64 18)"
+ORIGINAL_KEYCHAINS=()
 cleanup() {
+  if [ ${#ORIGINAL_KEYCHAINS[@]} -gt 0 ]; then
+    security list-keychains -d user -s "${ORIGINAL_KEYCHAINS[@]}" 2>/dev/null || true
+  fi
   security delete-keychain "$KEYCHAIN" 2>/dev/null || true
   rm -rf "$WORK"
 }
@@ -40,6 +44,15 @@ security set-keychain-settings "$KEYCHAIN"   # no auto-lock while signing
 security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
 security import "$WORK/identity.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign >/dev/null
 security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+# On CI runners codesign only finds identities in keychains on the user's search list (GitHub's
+# signing guide does the same). Locally the login keychain's search list is left alone.
+if [ "${CI:-}" = "true" ]; then
+  while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"; line="${line%\"}"; line="${line#\"}"
+    [ -n "$line" ] && ORIGINAL_KEYCHAINS+=("$line")
+  done < <(security list-keychains -d user)
+  security list-keychains -d user -s "$KEYCHAIN" "${ORIGINAL_KEYCHAINS[@]}"
+fi
 
 # The certificate is self-signed (not trusted by the system), so select it by its SHA-1 hash.
 IDENTITY="$(security find-identity -v "$KEYCHAIN" 2>/dev/null | awk '/SwiftExile Release/ {print $2; exit}')"
