@@ -94,6 +94,16 @@ private struct PermissionsTab: View {
                     Text("Accessibility")
                     Text("Needed to follow the game window and, later, for hotkeys.")
                 }
+                LabeledContent {
+                    if status.hotkeysAvailable {
+                        Label("Active", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    } else {
+                        Text("Not available").foregroundStyle(.secondary)
+                    }
+                } label: {
+                    Text("Global hotkeys")
+                    Text(status.registeredHotkeys.isEmpty ? "No hotkeys registered yet." : status.registeredHotkeys.joined(separator: ", "))
+                }
             } footer: {
                 if !status.accessibilityTrusted {
                     Text("After granting, SwiftExile picks it up automatically. If it is already listed in System Settings but not working, remove it with “−” and add it again.")

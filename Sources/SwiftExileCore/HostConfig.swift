@@ -68,3 +68,43 @@ public struct FocusChangePayload: Codable, Sendable, Equatable {
         self.usingHotkey = usingHotkey
     }
 }
+
+/// `MAIN->CLIENT::item-text` (`ipc/types.ts:183-192`).
+public struct ItemTextPayload: Codable, Sendable, Equatable {
+    public struct Point: Codable, Sendable, Equatable {
+        public var x: Double
+        public var y: Double
+    }
+    public var target: String
+    public var clipboard: String
+    public var position: Point
+    public var focusOverlay: Bool
+
+    public init(target: String, clipboard: String, x: Double, y: Double, focusOverlay: Bool) {
+        self.target = target
+        self.clipboard = clipboard
+        self.position = Point(x: x, y: y)
+        self.focusOverlay = focusOverlay
+    }
+}
+
+/// `OVERLAY->MAIN::track-area` (`ipc/types.ts:134-143`).
+public struct TrackAreaPayload: Codable, Sendable, Equatable {
+    public struct Point: Codable, Sendable, Equatable { public var x: Double; public var y: Double }
+    public struct Rect: Codable, Sendable, Equatable { public var x: Double; public var y: Double; public var width: Double; public var height: Double }
+    public var holdKey: String
+    public var closeThreshold: Double
+    public var from: Point
+    public var area: Rect
+    public var dpr: Double
+}
+
+public struct WidgetActionPayload: Codable, Sendable, Equatable {
+    public var target: String
+    public init(target: String) { self.target = target }
+}
+
+public struct VisibilityPayload: Codable, Sendable, Equatable {
+    public var isVisible: Bool
+    public init(isVisible: Bool) { self.isVisible = isVisible }
+}

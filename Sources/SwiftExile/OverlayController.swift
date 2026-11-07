@@ -93,6 +93,17 @@ final class OverlayController {
         trace("focus-game from \(source)")
         apply(model.assertGameActive())
     }
+
+    /// `assertOverlayActive`, for the copy-item flow and the widget area tracker.
+    func activate(source: String) {
+        trace("activate from \(source)")
+        apply(model.assertOverlayActive())
+    }
+
+    /// Upstream `GameWindow.isActive`: hotkeys are registered only while this is true.
+    var isGameActive: Bool { model.gameActive }
+    var isInteractable: Bool { model.isInteractable }
+    var onGameAttached: (() -> Void)?
     func renderState(shouldShow: Bool) { apply(model.renderState(shouldShow: shouldShow)) }
     func usedRecently(isOverlay: Bool) { wasUsedRecently = isOverlay }
 
@@ -111,6 +122,7 @@ final class OverlayController {
     private func gameAttached(_ snapshot: GameWindowTracker.Snapshot) {
         place(snapshot)
         status.attached(snapshot)
+        onGameAttached?()
         apply(model.attached())
         scheduleFocusUpdate()
     }

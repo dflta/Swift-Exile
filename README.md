@@ -6,7 +6,7 @@ SwiftExile replaces the Electron shell with a native Swift app and is moving the
 
 Not affiliated with or endorsed by Grinding Gear Games.
 
-> **Status:** early prototype (day 3). Native SwiftUI menu bar item and Settings window; the overlay follows the game window (tested with the Windows client under NotProton/CrossOver). Hotkeys and the native price check are not implemented yet; the overlay still shows Exiled Exchange 2's web widgets, which will be replaced by SwiftUI step by step.
+> **Status:** early prototype (day 4). Native SwiftUI menu bar item and Settings window; the overlay follows the game window and global hotkeys open the price check (tested with the Windows client under NotProton/CrossOver). The native SwiftUI price check is not built yet; the overlay still shows Exiled Exchange 2's web widgets, which will be replaced by SwiftUI step by step.
 
 ## Build
 

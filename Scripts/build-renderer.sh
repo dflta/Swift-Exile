@@ -16,6 +16,16 @@ cd "$RENDERER"
 if [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
   npm ci --no-audit --no-fund
 fi
+# Item and stat lookup indexes (public/data/<lang>/*.index.bin). They aren't in git; upstream CI
+# generates them before building (.github/workflows/main.yml). Without them every item lookup
+# fails and the price check shows "An error occurred while parsing the item".
+npm run make-index-files --silent
 # `npm run build` also runs vue-tsc type checking; upstream CI covers that, so call Vite directly.
 npx vite build --logLevel warn
+for lang in public/data/*/; do
+  if [ -f "$lang/items.ndjson" ] && [ ! -f "$lang/items-ref.index.bin" ]; then
+    echo "missing index files in $lang" >&2
+    exit 1
+  fi
+done
 echo "renderer built: $RENDERER/dist"

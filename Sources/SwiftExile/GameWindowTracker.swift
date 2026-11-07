@@ -145,7 +145,7 @@ final class GameWindowTracker {
         )
         current = snapshot
         log("info [GameWindow] attached to \"\(snapshot.title)\" (\(snapshot.appName), pid \(pid), \(flavor.displayName))")
-        log("info [GameWindow] frame \(Self.describe(geometry.frame)), titled \(geometry.isTitled), native fullscreen \(geometry.isNativeFullScreen) → overlay \(Self.describe(snapshot.contentRect))")
+        log("info [GameWindow] window \(Self.describe(geometry.frame)), titled \(geometry.isTitled), native fullscreen \(geometry.isNativeFullScreen) → overlay \(Self.describe(quartzContentRect(geometry)))")
         if case .wine(let prefix, let installDir) = flavor {
             log("info [GameWindow] Wine prefix \(prefix ?? "?"), install dir \(installDir ?? "?")")
         }
@@ -254,7 +254,7 @@ final class GameWindowTracker {
         snapshot.contentRect = contentRect
         current = snapshot
         let timing = lastTrigger.map { " \(Int(Date().timeIntervalSince($0.at) * 1000)) ms after \($0.name)" } ?? ""
-        log("debug [GameWindow] geometry changed\(timing): frame \(Self.describe(geometry.frame)), titled \(geometry.isTitled), native fullscreen \(geometry.isNativeFullScreen) → overlay \(Self.describe(contentRect))")
+        log("debug [GameWindow] geometry changed\(timing): window \(Self.describe(geometry.frame)), titled \(geometry.isTitled), native fullscreen \(geometry.isNativeFullScreen) → overlay \(Self.describe(quartzContentRect(geometry)))")
         onGeometryChange?(snapshot)
     }
 
@@ -292,12 +292,18 @@ final class GameWindowTracker {
         )
     }
 
-    private func cocoaContentRect(_ geometry: GameWindowGeometry) -> CGRect {
+    /// Overlay area in screen coordinates with the origin at the top-left of the main display
+    /// (same space as AX window frames), used for logs.
+    private func quartzContentRect(_ geometry: GameWindowGeometry) -> CGRect {
         let probe = NSRect(x: 0, y: 0, width: 400, height: 400)
         let titleBarHeight = NSWindow.frameRect(forContentRect: probe, styleMask: [.titled]).height - probe.height
-        let quartz = geometry.contentRect(titleBarHeight: titleBarHeight)
+        return geometry.contentRect(titleBarHeight: titleBarHeight)
+    }
+
+    /// Overlay area in AppKit coordinates (origin bottom-left of the main display), for `setFrame`.
+    private func cocoaContentRect(_ geometry: GameWindowGeometry) -> CGRect {
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-        return ScreenCoordinates.cocoaRect(fromQuartz: quartz, primaryHeight: primaryHeight)
+        return ScreenCoordinates.cocoaRect(fromQuartz: quartzContentRect(geometry), primaryHeight: primaryHeight)
     }
 
     private func copyAttribute<T>(_ element: AXUIElement, _ attribute: String) -> T? {

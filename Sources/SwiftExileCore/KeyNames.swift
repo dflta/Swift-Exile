@@ -22,6 +22,47 @@ public enum KeyNames {
         return map
     }()
 
+    /// Upstream key name → macOS virtual key code. Includes the modifier keys.
+    public static func macKeyCode(for name: String) -> UInt16? {
+        switch name {
+        case "Ctrl": return 59   // kVK_Control
+        case "Shift": return 56  // kVK_Shift
+        case "Alt": return 58    // kVK_Option
+        default: return byName[name]
+        }
+    }
+
+    private static let byName: [String: UInt16] = {
+        var map: [String: UInt16] = [:]
+        for (code, name) in byMacKeyCode { map[name] = code }
+        return map
+    }()
+
+    /// Windows virtual-key codes (`KeyToCode` in `ipc/KeyToCode.ts:1-109`). The game's ini stores
+    /// hotkeys as these codes.
+    public static let windowsVirtualKeyCodes: [String: Int] = {
+        var map: [String: Int] = [
+            "Backspace": 8, "Tab": 9, "Enter": 13, "Shift": 16, "Ctrl": 17, "Alt": 18, "CapsLock": 20,
+            "Escape": 27, "Space": 32, "PageUp": 33, "PageDown": 34, "End": 35, "Home": 36,
+            "ArrowLeft": 37, "ArrowUp": 38, "ArrowRight": 39, "ArrowDown": 40, "Insert": 45, "Delete": 46,
+            "NumpadMultiply": 106, "NumpadAdd": 107, "NumpadSubtract": 109, "NumpadDecimal": 110, "NumpadDivide": 111,
+            "Semicolon": 186, "Equal": 187, "Comma": 188, "Minus": 189, "Period": 190, "Slash": 191,
+            "Backquote": 192, "BracketLeft": 219, "Backslash": 220, "BracketRight": 221, "Quote": 222,
+        ]
+        for digit in 0...9 { map["\(digit)"] = 48 + digit }
+        for (offset, scalar) in "ABCDEFGHIJKLMNOPQRSTUVWXYZ".unicodeScalars.enumerated() { map[String(scalar)] = 65 + offset }
+        for digit in 0...9 { map["Numpad\(digit)"] = 96 + digit }
+        for number in 1...24 { map["F\(number)"] = 111 + number }
+        return map
+    }()
+
+    /// `CodeToKey` (`ipc/KeyToCode.ts:111-113`).
+    public static let nameForWindowsVirtualKey: [Int: String] = {
+        var map: [Int: String] = [:]
+        for (name, code) in windowsVirtualKeyCodes { map[code] = name }
+        return map
+    }()
+
     public static func isModifier(_ key: String) -> Bool {
         key == "Ctrl" || key == "Shift" || key == "Alt"
     }

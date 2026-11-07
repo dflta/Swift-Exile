@@ -51,6 +51,25 @@ If F1 or F3 fails, the log shows `reclaiming key focus` lines and possibly
 `the game kept taking keyboard focus back`. Note which game state it was; that is the data needed
 to fix risk R6.
 
+## Hotkeys and price check
+
+The hotkeys come from the overlay's own settings (Exiled Exchange 2). Defaults on the dev Mac:
+price check `Alt + D` (hold Alt), locked price check `Ctrl + D`, overlay key `Shift + Space`.
+Global hotkeys work only while the game window is in front, like upstream.
+
+| # | Step | Expected |
+|---|---|---|
+| H1 | Hover an item, press the price check key (hold mode: keep Alt held) | Price check opens next to the item; prices load. Log: `item copied in … ms → price-check` |
+| H2 | Same with the locked key (`Ctrl + D`) | Price check opens and the overlay takes focus (you can click filters) |
+| H3 | In hold mode, release Alt and move the mouse away | Price check closes; moving into it instead keeps it and makes it clickable |
+| H4 | Press the overlay key in the game | Overlay toggles; pressing it again (or Escape) returns to the game |
+| H5 | Hold Alt alone (no other key) in the game | Overlay hides after ~0.3 s so the game's own tooltip is visible; releasing Alt shows it again |
+| H6 | Press a hotkey while another app is in front | Nothing happens; the key reaches that app normally |
+| H7 | Hover nothing and press the price check key | Log: `No item text found.`; nothing else happens |
+
+Stash search, chat macros, Ctrl+wheel stash scrolling, and the heist OCR key are not implemented
+on macOS yet; their hotkeys log `this action is not implemented on macOS yet`.
+
 ## Reading the log
 
 - `[GameWindow] geometry changed 412 ms after Space change` — time from a transition to the

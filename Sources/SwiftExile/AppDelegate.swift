@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var webHost: WebViewHost?
     private var tracker: GameWindowTracker?
     private var overlay: OverlayController?
+    private var shortcuts: ShortcutController?
     private var browserWindow: NSWindow?
     private var trustTimer: Timer?
 
@@ -82,7 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         await hub.on(.updateHostConfig) { [weak self] payload in
             guard let config = try? payload?.decode(HostConfig.self) else { return }
-            await MainActor.run { self?.overlay?.hostConfigChanged(config) }
+            await MainActor.run {
+                self?.overlay?.hostConfigChanged(config)
+                self?.shortcuts?.hostConfigChanged(config)
+            }
         }
         await hub.on(.focusGame) { [weak self] _ in
             await MainActor.run { self?.overlay?.focusGame() }
@@ -90,6 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await hub.on(.renderState) { [weak self] payload in
             guard let state = try? payload?.decode(RenderStatePayload.self) else { return }
             await MainActor.run { self?.overlay?.renderState(shouldShow: state.shouldShow) }
+        }
+        await hub.on(.trackArea) { [weak self] payload in
+            guard let area = try? payload?.decode(TrackAreaPayload.self) else { return }
+            await MainActor.run { self?.shortcuts?.trackArea(area) }
         }
         await hub.on(.usedRecently) { [weak self] payload in
             guard let used = try? payload?.decode(UsedRecentlyPayload.self) else { return }
@@ -101,14 +109,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let webHost = WebViewHost(userAgentSuffix: AppInfo.webUserAgentSuffix(browserMode: false), transparent: true)
         let tracker = GameWindowTracker(log: { line in Task { await hub.log(line) } })
         let overlay = OverlayController(webHost: webHost, tracker: tracker, hub: hub, status: status)
+        let shortcuts = ShortcutController(hub: hub, overlay: overlay, status: status)
+        overlay.onGameAttached = { [weak shortcuts] in shortcuts?.gameAttached() }
         self.webHost = webHost
         self.tracker = tracker
         self.overlay = overlay
+        self.shortcuts = shortcuts
         webHost.load(url)
 
         if AXIsProcessTrusted() {
             status.accessibilityTrusted = true
             tracker.start()
+            shortcuts.start()
         } else {
             // Without Accessibility the server and browser mode still work (plan §2.10): wait,
             // don't quit like the Electron app does after 15 s.
@@ -122,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.status.accessibilityTrusted = true
                     Task { await hub.log("info [Host] Accessibility permission granted") }
                     self.tracker?.start()
+                    self.shortcuts?.start()
                 }
             }
         }
@@ -164,6 +177,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + toggleAt + 3) { [weak self] in
                 self?.debugToggle(label: "toggle 2 (expect back to game)")
+            }
+        }
+        if let path = options.debugItemPath {
+            DispatchQueue.main.asyncAfter(deadline: .now() + options.debugItemAt) { [weak self] in
+                guard let hub = self?.hub, let text = try? String(contentsOfFile: path, encoding: .utf8),
+                      let message = try? IpcMessage(.itemText, ItemTextPayload(
+                        target: "price-check", clipboard: text, x: 1200, y: 600, focusOverlay: false))
+                else { return }
+                Task {
+                    await hub.log("debug [Host] sending debug item from \(path)")
+                    await hub.send(.lastActive, message)
+                }
             }
         }
         if let seconds = options.quitAfter {

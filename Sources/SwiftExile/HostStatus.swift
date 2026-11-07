@@ -18,6 +18,9 @@ final class HostStatus {
     var derivedConfigPath: String?
     var derivedLogPath: String?
 
+    var hotkeysAvailable = false
+    var registeredHotkeys: [String] = []
+
     var gameFocused = false
     var overlayInteractable = false
     var overlayVisible = false

@@ -96,6 +96,7 @@ final class WebViewHost: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptM
         try {
           const msg = args.map((a) => {
             if (typeof a === 'string') return a;
+            if (a instanceof Error) return `${a.name}: ${a.message}\n${a.stack || ''}`;
             try { return JSON.stringify(a); } catch (e) { return String(a); }
           }).join(' ');
           window.webkit.messageHandlers.console.postMessage({ level, msg });

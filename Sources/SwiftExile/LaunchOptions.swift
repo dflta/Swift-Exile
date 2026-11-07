@@ -18,6 +18,9 @@ struct LaunchOptions {
     var selfTest = false
     /// Development check: toggle the overlay at this many seconds, and back 3 s later.
     var toggleAt: Double?
+    /// Development check: send this file's text to the renderer as a copied item (no game needed).
+    var debugItemPath: String?
+    var debugItemAt: Double = 6
 
     static func parse(
         arguments: [String] = CommandLine.arguments,
@@ -57,6 +60,10 @@ struct LaunchOptions {
                 options.selfTest = true
             case "--toggle-at":
                 options.toggleAt = Double(value ?? "")
+            case "--debug-item":
+                options.debugItemPath = value
+            case "--debug-item-at":
+                options.debugItemAt = Double(value ?? "") ?? options.debugItemAt
             default:
                 break
             }
