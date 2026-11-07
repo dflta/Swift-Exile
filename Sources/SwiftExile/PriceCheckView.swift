@@ -7,6 +7,8 @@ import SwiftUI
 struct PriceCheckView: View {
     let model: PriceCheckModel
     var onClose: () -> Void = {}
+    /// The header was dragged to a new place.
+    var onMoved: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -88,6 +90,7 @@ struct PriceCheckView: View {
             .help("Close (Esc)")
         }
         .padding(14)
+        .dragsWindow(onEnded: onMoved)
     }
 
     // MARK: Content

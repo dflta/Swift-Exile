@@ -2,30 +2,98 @@ import ApplicationServices
 import SwiftExileCore
 import SwiftUI
 
-/// Native macOS Settings window. Game and widget settings still live in the overlay for now;
-/// they move here as widgets are rebuilt in SwiftUI.
+/// SwiftExile's window (Settings, ⌘,): SwiftExile's own settings plus the parts of Exiled Exchange 2's
+/// overlay settings that SwiftExile implements natively. Overlay settings are saved to the same file
+/// the overlay uses and stay in sync with it.
 struct SettingsView: View {
     let status: HostStatus
     let actions: AppDelegate
+    @State private var page: Page?
+
+    init(status: HostStatus, actions: AppDelegate, page: Page = .game) {
+        self.status = status
+        self.actions = actions
+        _page = State(initialValue: page)
+    }
+
+    enum Page: String, CaseIterable, Identifiable {
+        case game, hotkeys, priceCheck, chat, stashSearch, leveling, permissions, about
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .game: return "Game"
+            case .hotkeys: return "Hotkeys"
+            case .priceCheck: return "Price Check"
+            case .chat: return "Chat Commands"
+            case .stashSearch: return "Stash Search"
+            case .leveling: return "Leveling"
+            case .permissions: return "Permissions"
+            case .about: return "About"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .game: return "gamecontroller"
+            case .hotkeys: return "keyboard"
+            case .priceCheck: return "tag"
+            case .chat: return "text.bubble"
+            case .stashSearch: return "magnifyingglass"
+            case .leveling: return "chart.line.uptrend.xyaxis"
+            case .permissions: return "lock.shield"
+            case .about: return "info.circle"
+            }
+        }
+    }
 
     var body: some View {
-        TabView {
-            GameTab(status: status)
-                .tabItem { Label("Game", systemImage: "gamecontroller") }
-            PriceCheckTab(actions: actions)
-                .tabItem { Label("Price Check", systemImage: "tag") }
-            PermissionsTab(status: status)
-                .tabItem { Label("Permissions", systemImage: "lock.shield") }
-            AboutTab(actions: actions)
-                .tabItem { Label("About", systemImage: "info.circle") }
+        NavigationSplitView {
+            List(Page.allCases, selection: $page) { page in
+                Label(page.title, systemImage: page.symbol).tag(page)
+            }
+            .navigationSplitViewColumnWidth(min: 170, ideal: 180, max: 220)
+        } detail: {
+            detail
+                .navigationTitle(page?.title ?? "SwiftExile")
         }
-        .frame(width: 520)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(minWidth: 760, minHeight: 540)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        let store = actions.overlaySettings
+        switch page ?? .game {
+        case .game: GameTab(status: status, store: store)
+        case .hotkeys: OverlaySettingsPage(store: store) { HotkeysPage(store: store) }
+        case .priceCheck: PriceCheckTab(actions: actions, store: store)
+        case .chat: OverlaySettingsPage(store: store) { ChatCommandsPage(store: store) }
+        case .stashSearch: OverlaySettingsPage(store: store) { StashSearchPage(store: store, actions: actions) }
+        case .leveling: LevelingTab(actions: actions, store: store)
+        case .permissions: PermissionsTab(status: status)
+        case .about: AboutTab(actions: actions)
+        }
+    }
+}
+
+/// Shows `content` once Exiled Exchange 2's settings file exists (the overlay creates it on first run).
+private struct OverlaySettingsPage<Content: View>: View {
+    let store: OverlaySettingsStore
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if store.settings == nil {
+            ContentUnavailableView("No overlay settings yet", systemImage: "doc.badge.gearshape",
+                                   description: Text("Exiled Exchange 2 creates its settings the first time the overlay runs. Start SwiftExile with the game once, then come back."))
+        } else {
+            content()
+        }
     }
 }
 
 private struct GameTab: View {
     let status: HostStatus
+    let store: OverlaySettingsStore
 
     var body: some View {
         Form {
@@ -52,6 +120,18 @@ private struct GameTab: View {
                 PathRow(title: "Game settings", path: status.derivedConfigPath)
                 PathRow(title: "Game log", path: status.derivedLogPath)
             }
+            if store.settings != nil {
+                Section {
+                    TextField("Game window title", text: store.text("windowTitle", fallback: "Path of Exile 2"))
+                    TextField("Game settings file", text: store.text("gameConfig"), prompt: Text("Found automatically"))
+                    TextField("Game log file", text: store.text("clientLog"), prompt: Text("Found automatically"))
+                } header: {
+                    Text("Overrides")
+                } footer: {
+                    Text("Leave the files empty to use the ones found next to the running game. Saved in Exiled Exchange 2's settings.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("SwiftExile") {
                 PathRow(title: "Settings folder", path: status.dataDir)
                 LabeledContent("Local server", value: status.serverPort > 0 ? "127.0.0.1:\(status.serverPort)" : "Starting…")
@@ -63,6 +143,7 @@ private struct GameTab: View {
 
 private struct PriceCheckTab: View {
     let actions: AppDelegate
+    let store: OverlaySettingsStore
     @AppStorage(ShortcutController.nativePriceCheckDefaultsKey) private var nativePriceCheck = true
     @AppStorage(PriceCurrency.defaultsKey) private var priceCurrency = PriceCurrency.auto.rawValue
 
@@ -80,6 +161,60 @@ private struct PriceCheckTab: View {
                 Text("Automatic shows divines from about 1 divine up and your core currency below, like Exiled Exchange 2. Applies to poe.ninja prices in the native price check.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            if store.settings != nil {
+                Section {
+                    Toggle("Search right away in auto-hide mode", isOn: store.widgetBool("price-check", "smartInitialSearch", fallback: true))
+                    Toggle("Search right away in locked mode", isOn: store.widgetBool("price-check", "lockedInitialSearch", fallback: true))
+                    Stepper(value: store.widgetNumber("price-check", "searchStatRange", fallback: 10), in: 0...50) {
+                        LabeledContent("Stat range", value: "±\(Int(store.widgetNumber("price-check", "searchStatRange", fallback: 10).wrappedValue)) %")
+                    }
+                    Toggle("Select all stats by default", isOn: store.widgetBool("price-check", "defaultAllSelected"))
+                    Toggle("Always show modifier tiers", isOn: store.widgetBool("price-check", "alwaysShowTier"))
+                    Toggle("Use the stack size as the minimum stock (bulk)", isOn: store.widgetBool("price-check", "activateStockFilter"))
+                    Picker("Group listings by seller", selection: store.widgetText("price-check", "collapseListings", fallback: "api")) {
+                        Text("Trade site").tag("api")
+                        Text("SwiftExile").tag("app")
+                    }
+                } header: {
+                    Text("Search")
+                } footer: {
+                    Text("“Right away” searches uniques, currency, and similar items as soon as the price check opens. Hotkeys are on the Hotkeys page. Saved in Exiled Exchange 2's settings.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct LevelingTab: View {
+    let actions: AppDelegate
+    let store: OverlaySettingsStore
+    @AppStorage(GameLogController.nativeTrackerKey) private var tracker = false
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Experience tracker", isOn: $tracker)
+                    .onChange(of: tracker) { _, on in actions.experienceTrackerChanged(on) }
+                if tracker {
+                    LabeledContent("Game log", value: actions.followedGameLog ?? "Found when the game is running")
+                        .textSelection(.enabled)
+                }
+            } footer: {
+                Text("Shows your level, the experience you get in the current area, and how far over the ideal area level you are, above the experience bar while you play. It reads the game's Client.txt (which also contains chat) on this Mac only; nothing is sent anywhere.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if store.settings != nil {
+                Section {
+                    Toggle("Let Exiled Exchange 2's widgets read Client.txt", isOn: store.flag("readClientLog"))
+                    TextField("Game log file", text: store.text("clientLog"), prompt: Text("Found automatically"))
+                } footer: {
+                    Text("Exiled Exchange 2's own leveling widgets in the overlay. While the experience tracker above is on, its XP widget is hidden so the two don't overlap.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

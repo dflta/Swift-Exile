@@ -86,8 +86,46 @@ final class WebViewHost: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptM
 
     // MARK: Console bridge (development aid: renderer console → stdout)
 
+    // MARK: Page styles
+
+    /// Extra CSS for the overlay page by key (e.g. hiding a web widget that SwiftExile replaces
+    /// natively). Applied now and again after every page load.
+    private var pageStyles: [String: String] = [:]
+
+    func setPageStyle(_ key: String, css: String?) {
+        pageStyles[key] = css
+        apply(styleKey: key)
+    }
+
+    private func apply(styleKey key: String) {
+        let id = "swiftexile-style-\(key)"
+        let css = pageStyles[key] ?? ""
+        let script = """
+        (function () {
+          let style = document.getElementById(\(Self.jsString(id)));
+          const css = \(Self.jsString(css));
+          if (!css) { if (style) style.remove(); return; }
+          if (!style) { style = document.createElement('style'); style.id = \(Self.jsString(id)); document.head.appendChild(style); }
+          style.textContent = css;
+        })();
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        for key in pageStyles.keys { apply(styleKey: key) }
+    }
+
+    private static func jsString(_ value: String) -> String {
+        let data = try? JSONEncoder().encode(value)
+        return data.map { String(decoding: $0, as: UTF8.self) } ?? "\"\""
+    }
+
     /// Called with the time from receiving item text to the next painted frame (milliseconds).
     var onPaintLatency: ((Double) -> Void)?
+    /// Called for the renderer's console warnings and errors (level, text), so they reach the log
+    /// file even when SwiftExile is started from Finder (stdout goes nowhere then).
+    var onConsoleProblem: ((String, String) -> Void)?
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.name == "latency", let body = message.body as? [String: Any], let ms = body["ms"] as? Double {
@@ -99,6 +137,7 @@ final class WebViewHost: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptM
               let text = body["msg"] as? String
         else { return }
         print("[web:\(level)] \(text)")
+        if level == "warn" || level == "error" { onConsoleProblem?(level, text) }
     }
 
     /// Measures item text arriving over the WebSocket → the next painted frame. Listens before the

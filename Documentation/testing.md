@@ -133,6 +133,46 @@ implemented on macOS (upstream runs it only on Windows).
 If Ctrl + scroll zooms the screen instead, macOS's accessibility zoom is set to Ctrl + scroll
 (System Settings ▸ Accessibility ▸ Zoom); pick another modifier there.
 
+## Game log (client log) features
+
+SwiftExile finds the game's `Client.txt` next to the running game (Wine install folder) unless a
+path is set in the overlay's settings. It reads the log when either is on:
+Settings ▸ Leveling ▸ **Experience tracker** (SwiftExile's native widget), or the overlay's
+Settings ▸ Leveling ▸ "Allow reading of Client.txt file" (Exiled Exchange 2's widgets).
+
+| # | Step | Expected |
+|---|---|---|
+| G1 | Turn on the experience tracker, with the game running | Log: `following …/Path of Exile 2/logs/Client.txt` and `[Leveling] from the log: level N, area level M` (your current level, without waiting for a level-up) |
+| G2 | Look above the experience bar while playing | A small "Lv · Area · Exp · Over" panel; clicks pass through it; it hides when another app is in front |
+| G3 | Change zones (a combat area, then a town) | Area and Exp update for the combat area; towns and hideouts don't change them |
+| G4 | Level up | Lv updates |
+| G5 | Turn on "Allow reading of Client.txt file" in the overlay; change zones | Exiled Exchange 2's XP widget also updates (log: `overlay saw load-zone …`) |
+| G6 | Turn both off | Log: `[GameLogWatcher] disabled`; the panel disappears |
+| G7 | With the library alpha enabled (overlay Settings ▸ General ▸ alphas), use it | Data files appear under `apt-data/csv-data/` (or the folder set for it) |
+
+## SwiftExile window (Settings)
+
+| # | Step | Expected |
+|---|---|---|
+| W1 | Menu bar ▸ Settings… | Window with a sidebar: Game, Hotkeys, Price Check, Chat Commands, Stash Search, Leveling, Permissions, About; your current overlay settings are shown |
+| W2 | Hotkeys ▸ "Open without auto-hide" (the price check that stays open and takes focus): click the field, press F6. In the game hover an item and press F6, then the old key | Field shows `F6`; F6 opens the price check right away (no restart); the old key does nothing. Set it back afterwards |
+| W3 | Press Backspace while recording a key; press Esc while recording | Backspace clears it; Esc keeps the old one |
+| W4 | Chat Commands: add `/played` with a hotkey, Send on | The hotkey types and sends it in the game |
+| W5 | Stash Search: open the stash in the game, press ▶ on an entry | The game comes to the front and the stash search box gets the text |
+| W6 | Change a setting in the overlay's own Settings and save; look at the window | The window shows the change |
+| W7 | Change a setting in the window, then open the overlay's Settings | The overlay shows the change |
+| W8 | Open the overlay (Shift + Space) | SwiftExile's own bar appears with standard macOS controls (⚙, 🔍, XP, "Price check (⌘V)"), no emblem; it disappears when the overlay closes |
+| W9 | Drag the bar and the XP panel by the ✥ grab tab on their left (the XP tab shows only while the overlay is open), and the settings by their header; close and reopen the overlay | The tab sits outside the panel, so the panel keeps its size when the tab appears; each stays where you put it; in the game the XP panel is click-through again, without a tab |
+| W9c | Open a price check, drag it by its header (item name area), then expand a section | The panel moves and grows downward from its new place; the league menu, pin and ✕ in the header still work; clicking outside still closes it (unless pinned) |
+| W9b | Open the overlay, then ⌘-Tab to another app and back | The bar, the settings, and the XP panel disappear with the overlay. Back in the game the overlay is closed (like Exiled Exchange 2): only the XP panel returns; Shift + Space brings the bar back |
+| W10 | ⚙ on the bar | SwiftExile's settings open inside the overlay, centered over the game; Esc, ✕, or ⚙ closes them |
+| W10b | Open the settings from ⚙, close the overlay (Shift + Space or ⌘-Tab away), then open the overlay again | The settings hide with the overlay and come back with it, until closed with Esc, ✕, or ⚙ |
+| W10c | Open the settings from ⚙ (they take keyboard focus), press Shift + Space; reopen, click into a hotkey field and press Shift + Space while it records | The first closes the overlay (no beep) and the settings come back with it; while recording, Shift + Space is recorded instead |
+| W11 | In those settings, type in a field and record a hotkey for a few seconds (windowed fullscreen) | Typing and recording keep working (the game's focus grabs return focus to the settings) |
+| W12 | 🔍 on the bar, pick a search (stash open in the game) | The game comes to the front and the stash search box gets the text |
+| W13 | XP on the bar | Turns the experience tracker on and off |
+| W14 | Copy an item (Ctrl + C in the game), click the bar's price check field, ⌘V | The native price check opens for that item |
+
 ## Deferred regression checks
 
 Not run yet because of the current game setup; run them before the first release that supports the

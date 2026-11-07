@@ -54,8 +54,19 @@ rsync -a --delete --exclude '*.map' "$DIST/" "$APP/Contents/Resources/renderer/"
 mkdir -p "$APP/Contents/Resources/renderer/engine"
 cp "$ROOT/Engine/index.html" "$ROOT/Engine/dist/engine.js" "$APP/Contents/Resources/renderer/engine/"
 cp "$ROOT/upstream/main/build/icons/icon.png" "$APP/Contents/Resources/icon.png"
-# App icon for Finder and the DMG (Info.plist: CFBundleIconFile = AppIcon), upstream's own .icns.
-cp "$ROOT/upstream/main/build/icons/icon.icns" "$APP/Contents/Resources/AppIcon.icns"
+# Menu bar icon (vector, made from Resources/StatusIcon.svg by Scripts/make-status-icon.swift).
+cp "$ROOT/Resources/StatusIcon.pdf" "$APP/Contents/Resources/StatusIcon.pdf"
+
+# App icon for Finder, the Dock, and the DMG (Info.plist: CFBundleIconFile = AppIcon), from the
+# 1024 px master in Resources/AppIcon.png (made by Scripts/make-app-icon.swift).
+ICONSET="$(mktemp -d)/AppIcon.iconset"
+mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+  sips -z $size $size "$ROOT/Resources/AppIcon.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  sips -z $((size * 2)) $((size * 2)) "$ROOT/Resources/AppIcon.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$(dirname "$ICONSET")"
 
 # Licenses of everything bundled (THIRD_PARTY_NOTICES.md).
 LICENSES="$APP/Contents/Resources/Licenses"

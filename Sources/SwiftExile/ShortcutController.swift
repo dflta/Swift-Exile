@@ -146,7 +146,13 @@ final class ShortcutController {
             // while the native price check has focus: it's our panel, with the game right behind it,
             // so the next item can be checked without closing it first.
             let nativeFocused = nativePriceCheck?.isKey ?? false
-            guard overlay.isGameActive || nativeFocused, !event.command, let action = active[hotkey] else { return false }
+            guard overlay.isGameActive || nativeFocused || overlay.companionHasFocus, !event.command,
+                  let action = active[hotkey] else { return false }
+            // While SwiftExile's settings (or the bar's field) have focus inside the open overlay, only
+            // the overlay key works, to close the overlay as it does from the web overlay.
+            if !overlay.isGameActive && !nativeFocused {
+                guard action.action == .toggleOverlay, overlay.isInteractable, !HotkeyField.isRecordingAny else { return false }
+            }
             swallowedKeyUps.insert(event.keyCode)
             if !event.isRepeat {
                 if nativeFocused {
@@ -207,6 +213,9 @@ final class ShortcutController {
             return
         }
         textBoxBusy = true
+        // What gets pasted, for when the game refuses a chat message.
+        let texts = steps.compactMap { if case .setClipboard(let text) = $0 { return text } else { return nil } }
+        log("debug [Shortcuts] chat/stash macro: \(texts.map { "\"\($0)\"" }.joined(separator: ", ")); game in front: \(overlay.isGameActive)")
         let pasteboard = NSPasteboard.general
         let saved = pasteboard.string(forType: .string)
         for step in steps {
@@ -272,6 +281,19 @@ final class ShortcutController {
         if focusOverlay && overlay.wasUsedRecently {
             overlay.activate(source: "copy-item")
         }
+    }
+
+    /// Item text pasted into the overlay bar's price check field: the native price check (focused, as
+    /// the overlay is open), or Exiled Exchange 2's when the native one is off.
+    func checkPastedItem(_ text: String) {
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let center: CGPoint = status.gameRect.map {
+            let quartz = ScreenCoordinates.cocoaRect(fromQuartz: $0, primaryHeight: primaryHeight)
+            return CGPoint(x: quartz.midX, y: quartz.midY)
+        } ?? .zero
+        if showNativePriceCheck(text: text, position: center, focus: true, holdKey: nil) { return }
+        send(.lastActive, try? IpcMessage(.itemText, ItemTextPayload(
+            target: "price-check", clipboard: text, x: center.x, y: center.y, focusOverlay: true)))
     }
 
     /// Sends the item to the native price check if it's enabled. Returns false to fall back to the renderer.

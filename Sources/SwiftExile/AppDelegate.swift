@@ -6,6 +6,8 @@ import SwiftExileCore
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let status = HostStatus()
+    /// Exiled Exchange 2's settings, edited from SwiftExile's window.
+    let overlaySettings = OverlaySettingsStore()
     /// Persistent log (`~/Library/Logs/SwiftExile/swiftexile.log`), also for Finder launches.
     let logFile = LogFile()
     let updates = Updates()
@@ -15,6 +17,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tracker: GameWindowTracker?
     private var overlay: OverlayController?
     private var shortcuts: ShortcutController?
+    /// Game log (`Client.txt`) for the overlay's client-log features, and the library's data files.
+    private var gameLog: GameLogController?
+    private var experienceTracker: ExperienceTrackerController?
+    /// Settings inside the open overlay (opened from SwiftExile's bar).
+    private var inOverlaySettings: InOverlaySettingsController?
+    /// SwiftExile's bar in the open overlay.
+    private var overlayBar: OverlayBarController?
     private var browserWindow: NSWindow?
     private var trustTimer: Timer?
 
@@ -56,6 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.hub = hub
         let configStore = ConfigStore(dataDir: options.dataDir, readOnly: options.devServerURL != nil)
         await wireEvents(hub: hub, configStore: configStore)
+        await overlaySettings.attach(configStore: configStore, hub: hub)
+        overlaySettings.onHostConfig = { [weak self] config in self?.applyHostConfig(config) }
 
         let configuration = HostServerConfiguration(
             host: options.listenHost,
@@ -95,8 +106,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func wireEvents(hub: EventHub, configStore: ConfigStore) async {
-        await hub.on(.saveConfig) { payload in
+        await hub.on(.saveConfig) { [weak self] payload in
             guard let save = try? payload?.decode(SaveConfigPayload.self) else { return }
+            await MainActor.run { self?.overlaySettings.savedByOverlay(contents: save.contents) }
             do {
                 try await configStore.save(contents: save.contents, isTemporary: save.isTemporary)
             } catch {
@@ -116,10 +128,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         await hub.on(.updateHostConfig) { [weak self] payload in
             guard let config = try? payload?.decode(HostConfig.self) else { return }
-            await MainActor.run {
-                self?.overlay?.hostConfigChanged(config)
-                self?.shortcuts?.hostConfigChanged(config)
+            await MainActor.run { self?.applyHostConfig(config) }
+        }
+        await hub.on(.reparseLog) { [weak self] _ in
+            await MainActor.run { self?.gameLog?.reparse() }
+        }
+        await hub.on(.writeData) { [weak self] payload in
+            guard let payload else { return }
+            // The overlay reports what it understood from the game log; log zone changes and level
+            // ups so client-log problems can be told apart (host not sending vs. overlay not parsing).
+            if case .object(let fields) = payload, case .string("client-log-event")? = fields["action"],
+               case .object(let event)? = fields["data"], case .string(let type)? = event["type"],
+               type == "load-zone" || type == "level-up" {
+                let detail = [event["zone"], event["areaLevel"], event["level"], event["charName"]]
+                    .compactMap { value -> String? in
+                        switch value {
+                        case .string(let text)?: return text
+                        case .number(let number)?: return String(Int(number))
+                        default: return nil
+                        }
+                    }
+                    .joined(separator: " ")
+                await hub.log("info [GameLog] overlay saw \(type): \(detail)")
             }
+            guard let writer = await MainActor.run(body: { self?.gameLog?.writer }) else { return }
+            await writer.handle(payload)
         }
         await hub.on(.focusGame) { [weak self] _ in
             await MainActor.run { self?.overlay?.focusGame() }
@@ -141,12 +174,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setUpOverlay(url: URL, hub: EventHub) {
         let webHost = WebViewHost(userAgentSuffix: AppInfo.webUserAgentSuffix(browserMode: false), transparent: true)
         let tracker = GameWindowTracker(log: { line in Task { await hub.log(line) } })
+        webHost.onConsoleProblem = { level, text in
+            Task { await hub.log("\(level) [Renderer] \(text.prefix(2000))") }
+        }
         webHost.onPaintLatency = { ms in
             Task { await hub.log(String(format: "debug [Renderer] price check painted %.0f ms after item text", ms)) }
         }
         let overlay = OverlayController(webHost: webHost, tracker: tracker, hub: hub, status: status)
         let shortcuts = ShortcutController(hub: hub, overlay: overlay, status: status)
-        overlay.onGameAttached = { [weak shortcuts] in shortcuts?.gameAttached() }
+        let gameLog = GameLogController(hub: hub, status: status, dataDir: options.dataDir)
+        self.gameLog = gameLog
+        let xpTracker = ExperienceTrackerController(model: gameLog.leveling, status: status)
+        xpTracker.isEnabled = gameLog.nativeTracker
+        experienceTracker = xpTracker
+        hideWebExperienceWidget(gameLog.nativeTracker, webHost: webHost)
+        if gameLog.nativeTracker { gameLog.setNativeTracker(true, save: false) }
+        overlay.onGameAttached = { [weak shortcuts, weak gameLog] in
+            shortcuts?.gameAttached()
+            gameLog?.gameAttached()
+        }
         // Native SwiftUI price check (preview), driven by upstream's logic in a hidden web view.
         let engine = PriceCheckEngine(serverPort: status.serverPort, log: { line in Task { await hub.log(line) } })
         let native = NativePriceCheckController(model: PriceCheckModel(engine: engine, log: { line in Task { await hub.log(line) } }))
@@ -159,7 +205,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.tracker = tracker
         self.overlay = overlay
         self.shortcuts = shortcuts
+        let settingsInOverlay = InOverlaySettingsController(status: status, actions: self)
+        let bar = OverlayBarController(status: status, actions: self)
+        settingsInOverlay.onFocusChange = { [weak overlay] in overlay?.companionFocusChanged() }
+        bar.onFocusChange = { [weak overlay] in overlay?.companionFocusChanged() }
+        overlay.companionPanels = { [weak settingsInOverlay, weak bar] in
+            var panels: [NSWindow] = []
+            if let settingsInOverlay, settingsInOverlay.isVisible { panels.append(settingsInOverlay.panel) }
+            if let bar, bar.panel.isKeyWindow { panels.append(bar.panel) }
+            return panels
+        }
+        overlay.onOpenOverlayChange = { [weak self, weak settingsInOverlay, weak bar] open in
+            // They come and go with the open overlay, like Exiled Exchange 2's widgets, including
+            // when another app comes to the front. Settings left open come back with the overlay.
+            if open {
+                bar?.show()
+                if let settingsInOverlay, settingsInOverlay.isOpen {
+                    settingsInOverlay.show(over: self?.status.gameRect)
+                }
+            } else {
+                bar?.hide()
+                settingsInOverlay?.suspend()
+            }
+            self?.experienceTracker?.overlayOpenChanged(open)
+        }
+        inOverlaySettings = settingsInOverlay
+        overlayBar = bar
         webHost.load(url)
+        // Hotkeys from the settings file right away, before the web overlay has loaded and sent them.
+        if let settings = overlaySettings.settings { applyHostConfig(settings.hostConfig()) }
 
         if AXIsProcessTrusted() {
             status.accessibilityTrusted = true
@@ -273,6 +347,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if let hub = self?.hub { Task { await hub.log("debug [Host] native debug item \(shown ? "shown" : "not shown (game not attached or preview off)")") } }
             }
         }
+        // Development: render every page of SwiftExile's window to PNGs in this folder.
+        if let folder = ProcessInfo.processInfo.environment["SWIFTEXILE_SETTINGS_SNAPSHOT"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                guard let self else { return }
+                for page in SettingsView.Page.allCases {
+                    let view = NSHostingView(rootView: SettingsView(status: self.status, actions: self, page: page))
+                    let window = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: 820, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+                    window.contentView = view
+                    window.orderBack(nil)
+                    view.layoutSubtreeIfNeeded()
+                    if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(folder)/\(page.rawValue).png"))
+                    }
+                    window.orderOut(nil)
+                }
+                if let bar = self.overlayBar?.panel.contentView {
+                    bar.setFrameSize(bar.fittingSize)
+                    bar.layoutSubtreeIfNeeded()
+                    if let rep = bar.bitmapImageRepForCachingDisplay(in: bar.bounds) {
+                        bar.cacheDisplay(in: bar.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(folder)/overlay-bar.png"))
+                    }
+                }
+                print("[snapshot] settings pages saved to \(folder)")
+            }
+        }
         if let path = options.nativeSnapshotPath {
             DispatchQueue.main.asyncAfter(deadline: .now() + options.snapshotDelay) { [weak self] in
                 let saved = self?.nativePriceCheck?.snapshot(to: URL(fileURLWithPath: path)) ?? false
@@ -283,6 +384,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { NSApp.terminate(nil) }
         }
     }
+
+    /// Hotkeys and options from the overlay's settings, whether the web overlay sent them or they
+    /// were computed from the file after a change in SwiftExile's window.
+    func applyHostConfig(_ config: HostConfig) {
+        overlay?.hostConfigChanged(config)
+        shortcuts?.hostConfigChanged(config)
+        gameLog?.hostConfigChanged(config)
+    }
+
+    /// Runs a stash search from SwiftExile's window (the game gets focus first).
+    func runStashSearch(_ text: String) {
+        shortcuts?.stashSearchFromOverlay(text)
+    }
+
+    // MARK: SwiftExile window
+
+    private var settingsCloseObserver: NSObjectProtocol?
+    /// Opens the SwiftUI Settings scene; registered by the menu bar icon view at launch.
+    var openSettingsAction: (() -> Void)?
+
+    /// Item text pasted into the bar's price check field.
+    func priceCheckPasted(_ text: String) {
+        shortcuts?.checkPastedItem(text)
+    }
+
+    /// The bar's ⚙ button: settings inside the overlay, like Exiled Exchange 2's own.
+    func openSettingsFromOverlay() {
+        guard let inOverlaySettings else { return }
+        if inOverlaySettings.isVisible {
+            inOverlaySettings.hide()
+        } else {
+            inOverlaySettings.show(over: status.gameRect)
+        }
+    }
+
+    /// Opens SwiftExile's window from the menu bar on the first click. macOS activates apps
+    /// cooperatively, and the game (under Wine) doesn't give up being frontmost, so a plain
+    /// `NSApp.activate()` is often refused and the window stays behind the game. While the window is
+    /// open SwiftExile is a regular app (Dock icon, ⌘-Tab); it returns to the menu bar when closed.
+    func presentSettings(open: () -> Void) {
+        if !options.browserMode { NSApp.setActivationPolicy(.regular) }
+        NSApp.activate(ignoringOtherApps: true)
+        open()
+        // SwiftUI creates the window asynchronously.
+        for delay in [0.05, 0.25] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.bringSettingsToFront() }
+        }
+    }
+
+    private func bringSettingsToFront() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue.contains("Settings") == true }) else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+        guard settingsCloseObserver == nil else { return }
+        settingsCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let observer = self.settingsCloseObserver { NotificationCenter.default.removeObserver(observer) }
+                self.settingsCloseObserver = nil
+                if !self.options.browserMode { NSApp.setActivationPolicy(.accessory) }
+            }
+        }
+    }
+
+    /// Settings ▸ Leveling ▸ Experience tracker.
+    func experienceTrackerChanged(_ on: Bool) {
+        gameLog?.setNativeTracker(on)
+        experienceTracker?.isEnabled = on
+        if let webHost { hideWebExperienceWidget(on, webHost: webHost) }
+    }
+
+    /// While the native tracker is on, Exiled Exchange 2's own XP widget would sit in the same
+    /// place, so it's hidden on the overlay page (CSS only; the shared settings file is untouched).
+    /// Upstream's CSS module classes keep their source names ("_xpContainer_<hash>").
+    private func hideWebExperienceWidget(_ hide: Bool, webHost: WebViewHost) {
+        webHost.setPageStyle("hide-xp-widget", css: hide
+            ? #"[class*="_widget_"]:has(> [class*="_xpContainer_"]) { display: none !important; }"#
+            : nil)
+    }
+
+    /// The game log SwiftExile follows, if any (shown in Settings).
+    var followedGameLog: String? { gameLog?.followedLog }
 
     /// Settings ▸ Price Check ▸ Show prices in.
     func priceCurrencyChanged(_ currency: PriceCurrency) {

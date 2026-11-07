@@ -11,6 +11,9 @@ public struct HostConfig: Decodable, Sendable, Equatable {
     public var windowTitle: String
     public var language: String
     public var readClientLog: Bool
+    /// The library feature (an alpha in the overlay's settings) writes data files (`FileWriter.ts`).
+    public var libraryAlpha: Bool
+    public var libraryOutputPath: String?
     public var initialDelay: Double
     public var hideOverlayOnBlur: Bool
 
@@ -27,13 +30,15 @@ public struct HostConfig: Decodable, Sendable, Equatable {
         windowTitle = "Path of Exile 2" // renderer default, Config.ts:202
         language = "en"
         readClientLog = false
+        libraryAlpha = false
+        libraryOutputPath = nil
         initialDelay = 48
         hideOverlayOnBlur = false
     }
 
     private enum CodingKeys: String, CodingKey {
         case shortcuts, restoreClipboard, clientLog, gameConfig, stashScroll, overlayKey, logKeys
-        case windowTitle, language, readClientLog, initialDelay, hideOverlayOnBlur
+        case windowTitle, language, readClientLog, libraryAlpha, libraryOutputPath, initialDelay, hideOverlayOnBlur
     }
 
     public init(from decoder: Decoder) throws {
@@ -49,6 +54,8 @@ public struct HostConfig: Decodable, Sendable, Equatable {
         windowTitle = (try? c.decode(String.self, forKey: .windowTitle)) ?? d.windowTitle
         language = (try? c.decode(String.self, forKey: .language)) ?? d.language
         readClientLog = (try? c.decode(Bool.self, forKey: .readClientLog)) ?? d.readClientLog
+        libraryAlpha = (try? c.decode(Bool.self, forKey: .libraryAlpha)) ?? d.libraryAlpha
+        libraryOutputPath = try? c.decodeIfPresent(String.self, forKey: .libraryOutputPath)
         initialDelay = (try? c.decode(Double.self, forKey: .initialDelay)) ?? d.initialDelay
         hideOverlayOnBlur = (try? c.decode(Bool.self, forKey: .hideOverlayOnBlur)) ?? d.hideOverlayOnBlur
     }

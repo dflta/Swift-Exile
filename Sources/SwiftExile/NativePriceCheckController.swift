@@ -50,7 +50,8 @@ final class NativePriceCheckController {
         let hosting = NSHostingController(rootView: PriceCheckView(model: model))
         hosting.sizingOptions = [.preferredContentSize]
         self.hosting = hosting
-        hosting.rootView = PriceCheckView(model: model, onClose: { [weak self] in self?.hide() })
+        hosting.rootView = PriceCheckView(model: model, onClose: { [weak self] in self?.hide() },
+                                          onMoved: { [weak self] in self?.movedByUser() })
         panel.contentViewController = hosting
 
         resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in
@@ -91,10 +92,10 @@ final class NativePriceCheckController {
     ///   - focus: take keyboard focus (locked price check).
     func show(clipboard: String, cursor: CGPoint, game: CGRect, focus: Bool) {
         let frame = PriceCheckPlacement.frame(game: game, cursorX: cursor.x, size: Self.maxSize)
-        areaRect = frame
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         let cocoa = ScreenCoordinates.cocoaRect(fromQuartz: frame, primaryHeight: primaryHeight)
         anchorTop = CGPoint(x: cocoa.minX, y: cocoa.maxY)
+        updateArea()
         suspended = false
         panel.setFrameTopLeftPoint(anchorTop!)
         panel.orderFrontRegardless()
@@ -163,6 +164,21 @@ final class NativePriceCheckController {
         } else {
             hide()
         }
+    }
+
+    /// Dragged by its header: keep the new place while SwiftUI resizes it.
+    private func movedByUser() {
+        anchorTop = CGPoint(x: panel.frame.minX, y: panel.frame.maxY)
+        updateArea()
+    }
+
+    /// The most the panel can cover, in Quartz coordinates.
+    private func updateArea() {
+        guard let anchorTop else { return }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cocoa = CGRect(x: anchorTop.x, y: anchorTop.y - Self.maxSize.height,
+                           width: Self.maxSize.width, height: Self.maxSize.height)
+        areaRect = CGRect(x: cocoa.minX, y: primaryHeight - cocoa.maxY, width: cocoa.width, height: cocoa.height)
     }
 
     private func keepAnchored() {

@@ -123,6 +123,25 @@ final class OverlayController {
     var isGameActive: Bool { model.gameActive }
     var isInteractable: Bool { model.isInteractable }
     var onGameAttached: (() -> Void)?
+    /// SwiftExile panels shown inside the open overlay (its settings): while one of them has
+    /// keyboard focus, the overlay counts as focused and doesn't take focus back.
+    var companionPanels: () -> [NSWindow] = { [] }
+    /// Called when the overlay becomes interactive (true) or returns to click-through (false).
+    var onInteractableChange: ((Bool) -> Void)?
+    /// Called when the open overlay appears (true) or goes away (false), including when it's hidden
+    /// because another app came to the front while it was open.
+    var onOpenOverlayChange: ((Bool) -> Void)?
+    private var wasOpen = false
+
+    /// One of the companion panels (settings, the bar's field) has keyboard focus.
+    var companionHasFocus: Bool { companionPanels().contains { $0.isKeyWindow } }
+
+    private var ownsKeyFocus: Bool {
+        panel.isKeyWindow || companionPanels().contains { $0.isKeyWindow }
+    }
+
+    /// A companion panel gained or lost keyboard focus.
+    func companionFocusChanged() { scheduleFocusUpdate() }
     func renderState(shouldShow: Bool) { apply(model.renderState(shouldShow: shouldShow)) }
     func usedRecently(isOverlay: Bool) { wasUsedRecently = isOverlay }
 
@@ -162,7 +181,7 @@ final class OverlayController {
     private func scheduleFocusUpdate() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            let effects = self.model.focusChanged(gameFrontmost: self.tracker.gameFrontmost, overlayIsKey: self.panel.isKeyWindow)
+            let effects = self.model.focusChanged(gameFrontmost: self.tracker.gameFrontmost, overlayIsKey: self.ownsKeyFocus)
             if !effects.isEmpty {
                 self.trace("focus update gameFrontmost=\(self.tracker.gameFrontmost) panelKey=\(self.panel.isKeyWindow) → \(effects)")
             }
@@ -195,12 +214,17 @@ final class OverlayController {
         lastRetake = Date()
         retakesThisSession += 1
         trace("game took keyboard focus; retaking (\(retakesThisSession) this session)")
+        // Back to the open settings panel if there is one, else the overlay itself.
+        if let companion = companionPanels().first(where: \.isVisible) {
+            companion.makeKeyAndOrderFront(nil)
+            return
+        }
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(webHost.webView)
     }
 
     private func retakeFocusIfStillNeeded() {
-        guard model.isInteractable, !panel.isKeyWindow, tracker.gameFrontmost else { return }
+        guard model.isInteractable, !ownsKeyFocus, tracker.gameFrontmost else { return }
         retakeFocus()
     }
 
@@ -246,12 +270,14 @@ final class OverlayController {
             case .broadcastFocusChange(let game, let overlay, let usingHotkey):
                 sendFocusChange(game: game, overlay: overlay, usingHotkey: usingHotkey)
             case .setInteractable(true):
+                onInteractableChange?(true)
                 retakesThisSession = 0
                 panel.ignoresMouseEvents = false
                 if alwaysActivate { NSApp.activate() }
                 panel.makeKeyAndOrderFront(nil)
                 panel.makeFirstResponder(webHost.webView)
             case .setInteractable(false):
+                onInteractableChange?(false)
                 pendingRetake?.cancel()
                 pendingRetake = nil
                 if retakesThisSession > 0 {
@@ -282,6 +308,11 @@ final class OverlayController {
         status.gameFocused = model.gameActive
         status.overlayInteractable = model.isInteractable
         status.overlayVisible = model.isVisible
+        let isOpen = model.isInteractable && model.isVisible
+        if isOpen != wasOpen {
+            wasOpen = isOpen
+            onOpenOverlayChange?(isOpen)
+        }
     }
 
     private func sendFocusChange(game: Bool, overlay: Bool, usingHotkey: Bool) {
