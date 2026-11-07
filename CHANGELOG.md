@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **License change:** SwiftExile's own code is now under the PolyForm Noncommercial License 1.0.0
+  (free for noncommercial use; selling or commercial use needs permission). 0.1.0 and 0.1.1 stay
+  available under the MIT License. Bundled components such as Exiled Exchange 2 keep their own
+  licenses.
+- The app's copyright line and Settings ▸ About now credit © 2026 dflta.
+
 ## 0.1.1
 
 - First update delivered through Sparkle. Checks that installed copies update in place and keep

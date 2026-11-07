@@ -51,4 +51,10 @@ Releases: [Documentation/releasing.md](Documentation/releasing.md).
 
 ## License
 
-SwiftExile is MIT-licensed. It bundles Exiled Exchange 2, which is MIT-licensed by its authors; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+SwiftExile is **source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE): free for personal, hobby, research, and other noncommercial use, including sharing modified copies under the same terms. Selling it, or using it in a commercial product or service, needs permission from the author. Versions 0.1.0 and 0.1.1 were released under the MIT License and stay available under it.
+
+It bundles Exiled Exchange 2, which keeps its own MIT License, and other open-source components under their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The name "SwiftExile" and its icon aren't covered by the license: modified copies must use a different name.
+
+Contributions are welcome and are accepted under the same license.

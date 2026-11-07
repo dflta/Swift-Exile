@@ -159,6 +159,7 @@ private struct AboutTab: View {
             Section {
                 LabeledContent("Version", value: AppInfo.version)
                 LabeledContent("Exiled Exchange 2", value: AppInfo.upstreamVersion)
+                LabeledContent("Copyright", value: "© 2026 dflta. PolyForm Noncommercial 1.0.0.")
             }
             if actions.updates.canCheck {
                 Section("Updates") {

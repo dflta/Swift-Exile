@@ -1,5 +1,9 @@
 # Third-party notices
 
+SwiftExile's own code is licensed under the PolyForm Noncommercial License 1.0.0 (see
+[LICENSE](LICENSE)). The components below keep their own licenses; the noncommercial terms do not
+apply to them.
+
 ## Exiled Exchange 2 / Awakened PoE Trade
 
 SwiftExile bundles the renderer (user interface and item parser) of
