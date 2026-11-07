@@ -49,8 +49,9 @@ final class GameWindowTracker {
 
     func start() {
         let workspace = NSWorkspace.shared.notificationCenter
-        tokens.append(workspace.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handleAppActivation() }
+        tokens.append(workspace.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+            MainActor.assumeIsolated { self?.handleAppActivation(pid: pid) }
         })
         tokens.append(workspace.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.scheduleRescans() }
@@ -192,7 +193,12 @@ final class GameWindowTracker {
         }
     }
 
-    private func handleAppActivation() {
+    /// Pid from the latest activation notification. `NSWorkspace.frontmostApplication` lags behind
+    /// that notification (measured: ~500 ms after a Space switch back), so prefer this right after it.
+    private var activated: (pid: pid_t, at: Date)?
+
+    private func handleAppActivation(pid: pid_t?) {
+        if let pid { activated = (pid, Date()) }
         if current == nil {
             scan()
         } else {
@@ -260,7 +266,13 @@ final class GameWindowTracker {
 
     private func reportFocus() {
         guard let snapshot = current else { return }
-        var focused = NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.pid
+        let frontmostPid: pid_t?
+        if let activated, Date().timeIntervalSince(activated.at) < 1 {
+            frontmostPid = activated.pid
+        } else {
+            frontmostPid = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        }
+        var focused = frontmostPid == snapshot.pid
         if focused, let app = appElement, let window = windowElement,
            let focusedWindow: AXUIElement = copyAttribute(app, kAXFocusedWindowAttribute) {
             focused = CFEqual(focusedWindow, window)

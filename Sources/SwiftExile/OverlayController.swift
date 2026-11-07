@@ -13,7 +13,7 @@ final class OverlayPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        collectionBehavior = Self.behavior(gameInNativeFullScreen: false)
         hidesOnDeactivate = false
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = false
@@ -24,6 +24,16 @@ final class OverlayPanel: NSPanel {
         // the game raises its borderless fullscreen window to layer 26 (above the menu bar) while
         // it is frontmost, so a floating overlay ends up hidden behind it.
         level = .screenSaver // parity with setAlwaysOnTop(true, 'screen-saver')
+    }
+
+    /// Spaces: a game in a native fullscreen Space needs the overlay to join all Spaces (and be a
+    /// fullscreen auxiliary) to appear there. Otherwise the overlay belongs to the game's Space, so
+    /// it slides away with it during a Space switch instead of lingering until the switch ends
+    /// (measured ~1 s with `.canJoinAllSpaces`).
+    static func behavior(gameInNativeFullScreen: Bool) -> NSWindow.CollectionBehavior {
+        gameInNativeFullScreen
+            ? [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+            : [.fullScreenAuxiliary, .stationary, .ignoresCycle]
     }
 
     /// Keep the overlay above the game even if something resets the level.
@@ -142,6 +152,8 @@ final class OverlayController {
     }
 
     private func place(_ snapshot: GameWindowTracker.Snapshot) {
+        let behavior = OverlayPanel.behavior(gameInNativeFullScreen: snapshot.geometry.isNativeFullScreen)
+        if panel.collectionBehavior != behavior { panel.collectionBehavior = behavior }
         panel.setFrame(snapshot.contentRect, display: true)
         status.gameRect = snapshot.contentRect
     }

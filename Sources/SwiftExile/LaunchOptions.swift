@@ -21,6 +21,8 @@ struct LaunchOptions {
     /// Development check: send this file's text to the renderer as a copied item (no game needed).
     var debugItemPath: String?
     var debugItemAt: Double = 6
+    /// Send the debug item this many times, 3 s apart (latency measurements).
+    var debugItemRepeat = 1
 
     static func parse(
         arguments: [String] = CommandLine.arguments,
@@ -62,6 +64,8 @@ struct LaunchOptions {
                 options.toggleAt = Double(value ?? "")
             case "--debug-item":
                 options.debugItemPath = value
+            case "--debug-item-repeat":
+                options.debugItemRepeat = Int(value ?? "") ?? 1
             case "--debug-item-at":
                 options.debugItemAt = Double(value ?? "") ?? options.debugItemAt
             default:

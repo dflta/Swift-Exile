@@ -1,10 +1,13 @@
 import AppKit
+import SwiftUI
 import ApplicationServices
 import SwiftExileCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let status = HostStatus()
+    /// Persistent log (`~/Library/Logs/SwiftExile/swiftexile.log`), also for Finder launches.
+    let logFile = LogFile()
     private let options = LaunchOptions.parse()
     private var hub: EventHub?
     private var webHost: WebViewHost?
@@ -38,7 +41,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Startup
 
     private func start() async {
-        let hub = EventHub(logSink: { line in FileHandle.standardOutput.write(Data(("[host] " + line).utf8)) })
+        let logFile = self.logFile
+        logFile.startSession("SwiftExile \(AppInfo.version) (EE2 \(AppInfo.upstreamVersion)), pid \(ProcessInfo.processInfo.processIdentifier)")
+        let hub = EventHub(logSink: { line in
+            FileHandle.standardOutput.write(Data(("[host] " + line).utf8))
+            logFile.write(line)
+        })
         self.hub = hub
         let configStore = ConfigStore(dataDir: options.dataDir, readOnly: options.devServerURL != nil)
         await wireEvents(hub: hub, configStore: configStore)
@@ -125,6 +133,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setUpOverlay(url: URL, hub: EventHub) {
         let webHost = WebViewHost(userAgentSuffix: AppInfo.webUserAgentSuffix(browserMode: false), transparent: true)
         let tracker = GameWindowTracker(log: { line in Task { await hub.log(line) } })
+        webHost.onPaintLatency = { ms in
+            Task { await hub.log(String(format: "debug [Renderer] price check painted %.0f ms after item text", ms)) }
+        }
         let overlay = OverlayController(webHost: webHost, tracker: tracker, hub: hub, status: status)
         let shortcuts = ShortcutController(hub: hub, overlay: overlay, status: status)
         overlay.onGameAttached = { [weak shortcuts] in shortcuts?.gameAttached() }
@@ -143,11 +154,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // don't quit like the Electron app does after 15 s.
             Task { await hub.log("warn [Host] Accessibility permission missing; waiting for it to be granted") }
             _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+            // macOS prompts only once per app; a stale entry from an older (differently signed)
+            // build gets no prompt at all. Show our Permissions tab with instructions after a moment.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self, !AXIsProcessTrusted() else { return }
+                self.showPermissionsWindow()
+            }
             trustTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard AXIsProcessTrusted(), let self else { return }
                     self.trustTimer?.invalidate()
                     self.trustTimer = nil
+                    self.permissionsWindow?.close()
                     self.status.accessibilityTrusted = true
                     Task { await hub.log("info [Host] Accessibility permission granted") }
                     self.tracker?.start()
@@ -155,6 +173,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    private var permissionsWindow: NSWindow?
+
+    /// Shows the SwiftUI Permissions view in its own window. (SwiftUI's Settings scene can only be
+    /// opened from inside a view via `openSettings`; `showSettingsWindow:` no longer works.)
+    private func showPermissionsWindow() {
+        if permissionsWindow == nil {
+            let view = PermissionsTab(status: status).frame(width: 520).fixedSize(horizontal: false, vertical: true)
+            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            window.title = "SwiftExile needs Accessibility access"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            permissionsWindow = window
+        }
+        NSApp.activate()
+        permissionsWindow?.center()
+        permissionsWindow?.makeKeyAndOrderFront(nil)
     }
 
     private func openBrowserWindow(url: URL) {
@@ -200,7 +236,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         if let path = options.debugItemPath {
-            DispatchQueue.main.asyncAfter(deadline: .now() + options.debugItemAt) { [weak self] in
+            for repeatIndex in 0..<max(1, options.debugItemRepeat) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + options.debugItemAt + Double(repeatIndex) * 3) { [weak self] in
                 guard let hub = self?.hub, let text = try? String(contentsOfFile: path, encoding: .utf8),
                       let message = try? IpcMessage(.itemText, ItemTextPayload(
                         target: "price-check", clipboard: text, x: 1200, y: 600, focusOverlay: false))
@@ -209,6 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     await hub.log("debug [Host] sending debug item from \(path)")
                     await hub.send(.lastActive, message)
                 }
+            }
             }
         }
         if let seconds = options.quitAfter {
@@ -244,6 +282,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openDataFolder() {
         try? FileManager.default.createDirectory(at: options.dataDir, withIntermediateDirectories: true)
         NSWorkspace.shared.open(options.dataDir)
+    }
+
+    func openLogFile() {
+        logFile.flush()
+        NSWorkspace.shared.open(logFile.url)
     }
 
     func openLicenses() {

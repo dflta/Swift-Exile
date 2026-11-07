@@ -78,7 +78,7 @@ private struct PathRow: View {
     }
 }
 
-private struct PermissionsTab: View {
+struct PermissionsTab: View {
     let status: HostStatus
 
     var body: some View {
@@ -106,7 +106,7 @@ private struct PermissionsTab: View {
                 }
             } footer: {
                 if !status.accessibilityTrusted {
-                    Text("After granting, SwiftExile picks it up automatically. If it is already listed in System Settings but not working, remove it with “−” and add it again.")
+                    Text("After granting, SwiftExile picks it up automatically. If macOS shows no prompt, SwiftExile is probably already listed from an older build: in System Settings ▸ Privacy & Security ▸ Accessibility, select SwiftExile, remove it with “−”, then add it again with “+” (or switch it off and on).")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

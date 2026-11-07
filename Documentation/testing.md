@@ -19,6 +19,29 @@ Run them on every release, and whenever the window tracking or overlay focus cod
 
 Note the result of each step (pass / fail / what you saw). Attach the log file when reporting.
 
+## Automated transition test
+
+With the game and SwiftExile running (game in front), run:
+
+```bash
+swift Scripts/transition-test.swift --cycles=10            # app switching
+swift Scripts/transition-test.swift --cycles=10 --spaces   # plus Space switching (needs a second Space)
+```
+
+It switches apps (and Spaces) away and back and checks the window server's real window positions,
+independently of SwiftExile. Don't touch the keyboard or mouse while it runs. Pass: 0 failures,
+p95 ≤ 500 ms, max ≤ 1500 ms. Space switches that macOS applies to another display are reported as
+skipped.
+
+## Permissions (first launch from Finder)
+
+1. Open `build/SwiftExile.app` from Finder.
+2. Expected: a macOS prompt for Accessibility, or, if SwiftExile is listed from an older build,
+   SwiftExile's own "needs Accessibility access" window after 3 s.
+3. Grant Accessibility (if listed from an older build: remove with "−", add again with "+").
+4. Expected: the window closes by itself; the menu bar shows the game as attached; hotkeys work.
+   No Input Monitoring prompt is expected.
+
 ## Window tracking
 
 | # | Step | Expected |

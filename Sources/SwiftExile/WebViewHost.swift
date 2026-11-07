@@ -13,9 +13,13 @@ final class WebViewHost: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptM
         configuration.userContentController.addUserScript(
             WKUserScript(source: Self.consoleBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         )
+        configuration.userContentController.addUserScript(
+            WKUserScript(source: Self.paintTimer, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        )
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         configuration.userContentController.add(self, name: "console")
+        configuration.userContentController.add(self, name: "latency")
         webView.uiDelegate = self
         webView.navigationDelegate = self
         webView.isInspectable = true // Safari ▸ Develop menu, like Electron's toggleDevTools
@@ -82,13 +86,43 @@ final class WebViewHost: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptM
 
     // MARK: Console bridge (development aid: renderer console → stdout)
 
+    /// Called with the time from receiving item text to the next painted frame (milliseconds).
+    var onPaintLatency: ((Double) -> Void)?
+
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "latency", let body = message.body as? [String: Any], let ms = body["ms"] as? Double {
+            onPaintLatency?(ms)
+            return
+        }
         guard let body = message.body as? [String: Any],
               let level = body["level"] as? String,
               let text = body["msg"] as? String
         else { return }
         print("[web:\(level)] \(text)")
     }
+
+    /// Measures item text arriving over the WebSocket → the next painted frame. Listens before the
+    /// renderer's own handler (registered at construction), then waits two animation frames:
+    /// the first runs after Vue's DOM update, the second after that frame was painted.
+    private static let paintTimer = """
+    (function () {
+      const Original = window.WebSocket;
+      function TimedWebSocket(url, protocols) {
+        const socket = protocols === undefined ? new Original(url) : new Original(url, protocols);
+        socket.addEventListener('message', (event) => {
+          if (typeof event.data !== 'string' || !event.data.includes('"MAIN->CLIENT::item-text"')) return;
+          const start = performance.now();
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            try { window.webkit.messageHandlers.latency.postMessage({ ms: performance.now() - start }); } catch (e) {}
+          }));
+        });
+        return socket;
+      }
+      TimedWebSocket.prototype = Original.prototype;
+      for (const key of ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']) TimedWebSocket[key] = Original[key];
+      window.WebSocket = TimedWebSocket;
+    })();
+    """
 
     private static let consoleBridge = """
     (function () {

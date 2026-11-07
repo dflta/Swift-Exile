@@ -44,6 +44,7 @@ struct MenuBarContent: View {
 
         Button("Open in Browser") { actions.openInBrowser() }
         Button("Open Settings Folder") { actions.openDataFolder() }
+        Button("Show Log") { actions.openLogFile() }
 
         Divider()
 

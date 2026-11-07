@@ -24,6 +24,10 @@ fi
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/SwiftExile" "$APP/Contents/MacOS/SwiftExile"
+if [ "$CONFIG" = "release" ]; then
+  # Drop debug and local symbols (smaller binary). No dSYM is kept yet; add one before public releases.
+  strip -S -x "$APP/Contents/MacOS/SwiftExile"
+fi
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
 # Record which upstream release the renderer comes from (shown in the About page and logs).

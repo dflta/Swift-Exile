@@ -18,7 +18,7 @@ Scripts/bundle-app.sh            # builds the renderer and build/SwiftExile.app
 open build/SwiftExile.app
 ```
 
-`swift test` runs the host's unit and integration tests. Overlay and window-tracking checks need the real game; see [Documentation/testing.md](Documentation/testing.md) and run them with `Scripts/run-diagnostics.sh`.
+`swift test` runs the host's unit and integration tests. Overlay and window-tracking checks need the real game; see [Documentation/testing.md](Documentation/testing.md), run them with `Scripts/run-diagnostics.sh`, and use `swift Scripts/transition-test.swift` for the automated transition check. The app always logs to `~/Library/Logs/SwiftExile/swiftexile.log` (menu bar ▸ Show Log).
 
 ### Development flags
 
