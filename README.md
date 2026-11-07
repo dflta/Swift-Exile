@@ -30,6 +30,7 @@ open build/SwiftExile.app
 | `--listen=[host][:port]` | Server address, as in upstream |
 | `SWIFTEXILE_TRACE_FOCUS=1` | Log every overlay focus change and focus reclaim |
 | `SWIFTEXILE_ACTIVATION=app` | Activate SwiftExile whenever the overlay becomes interactive (diagnostics) |
+| `SWIFTEXILE_RETOGGLE=1` / `0` | Force re-pressing (or not) modifiers you're holding when copying an item; by default only the native client re-presses them |
 
 Do not run SwiftExile and the Electron app at the same time: they share the settings file.
 

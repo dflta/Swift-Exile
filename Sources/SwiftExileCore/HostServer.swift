@@ -146,7 +146,10 @@ public enum HostServer {
             }
             Task.detached {
                 do {
-                    try await app.runService()
+                    // No graceful-shutdown signals: graceful shutdown waits for open connections,
+                    // and the renderer's WebSocket never closes, so SIGTERM/Ctrl+C left the app
+                    // running. The app handles those signals itself and exits.
+                    try await app.runService(gracefulShutdownSignals: [])
                     onStopped()
                 } catch {
                     once.resume(with: .failure(error))

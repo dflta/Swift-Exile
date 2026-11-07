@@ -78,6 +78,27 @@ import Testing
         #expect(KeySequences.releaseAfterHotkey("Ctrl + D", keepModKeys: false) == [KeyStep("D", down: false), KeyStep("Ctrl", down: false)])
     }
 
+    @Test func holdModeDoesNotRepressHeldAltUnderWine() {
+        // Alt + D with keepModKeys: the user keeps holding Alt.
+        let held = KeySequences.heldModifiers(after: "Alt + D", keepModKeys: true)
+        #expect(held == ["Alt"])
+        #expect(KeySequences.copyItemModifiersToPress(showModsKey: "Alt", heldModifiers: held, retoggleHeld: false) == ["Ctrl"])
+        // Native client keeps upstream's re-toggle.
+        #expect(KeySequences.copyItemModifiersToPress(showModsKey: "Alt", heldModifiers: held, retoggleHeld: true) == ["Ctrl", "Alt"])
+    }
+
+    @Test func lockedHotkeyReleasesModifiersSoAllArePressed() {
+        let held = KeySequences.heldModifiers(after: "Ctrl + D", keepModKeys: false)
+        #expect(held.isEmpty)
+        #expect(KeySequences.copyItemModifiersToPress(showModsKey: "Alt", heldModifiers: held, retoggleHeld: false) == ["Ctrl", "Alt"])
+    }
+
+    @Test func flavorDecidesRetoggle() {
+        #expect(GameFlavor.native(bundleID: "x").retogglesHeldModifiers)
+        #expect(!GameFlavor.wine(prefix: nil, installDir: nil).retogglesHeldModifiers)
+        #expect(!GameFlavor.unknown.retogglesHeldModifiers)
+    }
+
     @Test func copyChordUsesShowModsKey() {
         #expect(KeySequences.copyItemModifiers(showModsKey: "Alt") == ["Ctrl", "Alt"])
         #expect(KeySequences.copyItemModifiers(showModsKey: "Ctrl") == ["Ctrl"])

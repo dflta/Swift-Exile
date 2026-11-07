@@ -14,7 +14,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var browserWindow: NSWindow?
     private var trustTimer: Timer?
 
+    private var signalSources: [DispatchSourceSignal] = []
+
+    /// SIGTERM (kill, logout) and SIGINT (Ctrl+C in the diagnostics terminal) quit the app.
+    private func installSignalHandlers() {
+        for signalNumber in [SIGTERM, SIGINT] {
+            signal(signalNumber, SIG_IGN) // let the dispatch source receive it instead
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler { NSApp.terminate(nil) }
+            source.resume()
+            signalSources.append(source)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installSignalHandlers()
         // Info.plist sets LSUIElement (menu bar app, no Dock icon). The debug browser window
         // behaves like a normal app instead.
         if options.browserMode { NSApp.setActivationPolicy(.regular) }

@@ -97,6 +97,14 @@ public enum GameFlavor: Equatable, Sendable {
         return URL(fileURLWithPath: installDir).appendingPathComponent("logs/Client.txt").path
     }
 
+    /// Whether the copy chord re-presses modifiers the user is already holding. Upstream does it
+    /// on macOS for the native client (`Shortcuts.ts:299-306`); the Windows client under Wine
+    /// doesn't need it, and the extra presses confuse other apps.
+    public var retogglesHeldModifiers: Bool {
+        if case .native = self { return true }
+        return false
+    }
+
     public var displayName: String {
         switch self {
         case .wine: return "Windows client (Wine)"

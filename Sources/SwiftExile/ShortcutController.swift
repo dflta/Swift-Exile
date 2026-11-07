@@ -140,14 +140,15 @@ final class ShortcutController {
 
     private func run(_ entry: ShortcutAction) {
         if logKeys { log("debug [Shortcuts] Action type: \(entry.action)") }
-        synthesizer.post(KeySequences.releaseAfterHotkey(entry.shortcut, keepModKeys: entry.keepModKeys))
+        let held = KeySequences.heldModifiers(after: entry.shortcut, keepModKeys: entry.keepModKeys)
+        synthesizer.post(KeySequences.releaseAfterHotkey(entry.shortcut, keepModKeys: entry.keepModKeys), alsoHeld: held)
 
         switch entry.action {
         case .toggleOverlay:
             areaModel.stop()
             overlay.toggle(source: "hotkey")
         case .copyItem(let target, let focusOverlay):
-            copyItem(target: target, focusOverlay: focusOverlay)
+            copyItem(target: target, focusOverlay: focusOverlay, held: held)
         case .triggerEvent(let target):
             send(.broadcast, try? IpcMessage(.widgetAction, WidgetActionPayload(target: target)))
         case .stashSearch, .pasteInChat, .ocrText:
@@ -158,15 +159,17 @@ final class ShortcutController {
     }
 
     /// Copy-item flow (`Shortcuts.ts:215-244`).
-    private func copyItem(target: String, focusOverlay: Bool) {
+    private func copyItem(target: String, focusOverlay: Bool, held: Set<String>) {
         let position = CGEvent(source: nil)?.location ?? .zero
-        let modifiers = KeySequences.copyItemModifiers(showModsKey: showModsKey)
+        let modifiers = KeySequences.copyItemModifiersToPress(
+            showModsKey: showModsKey, heldModifiers: held,
+            retoggleHeld: ProcessInfo.processInfo.environment["SWIFTEXILE_RETOGGLE"].map { $0 == "1" } ?? status.gameFlavor.retogglesHeldModifiers)
         let poller = poller
         let startedAt = Date()
         Task { [weak self] in
             do {
                 let text = try await poller.readItemText(afterPrepare: { [weak self] in
-                    await MainActor.run { self?.pressCopyKeys(modifiers) }
+                    await MainActor.run { self?.pressCopyKeys(modifiers, held: held) }
                 })
                 self?.deliverItem(text: text, target: target, position: position, focusOverlay: focusOverlay, startedAt: startedAt)
             } catch {
@@ -176,17 +179,18 @@ final class ShortcutController {
     }
 
     /// `pressKeysToCopyItemText` (`Shortcuts.ts:293-324`): modifiers down, tap C, release 10 ms later.
-    private func pressCopyKeys(_ modifiers: [String]) {
-        synthesizer.post(modifiers.map { KeyStep($0, down: true) })
-        synthesizer.tap("C")
+    private func pressCopyKeys(_ modifiers: [String], held: Set<String>) {
+        synthesizer.post(modifiers.map { KeyStep($0, down: true) }, alsoHeld: held)
+        synthesizer.tap("C", alsoHeld: held)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self] in
-            self?.synthesizer.post(modifiers.reversed().map { KeyStep($0, down: false) })
+            self?.synthesizer.post(modifiers.reversed().map { KeyStep($0, down: false) }, alsoHeld: held)
         }
     }
 
     private func deliverItem(text: String, target: String, position: CGPoint, focusOverlay: Bool, startedAt: Date) {
         areaModel.stop()
-        log("debug [Shortcuts] item copied in \(Int(Date().timeIntervalSince(startedAt) * 1000)) ms → \(target)")
+        let advanced = text.contains("{ ") ? "with advanced mod descriptions" : "without advanced mod descriptions"
+        log("debug [Shortcuts] item copied in \(Int(Date().timeIntervalSince(startedAt) * 1000)) ms → \(target), \(advanced)")
         send(.lastActive, try? IpcMessage(.itemText, ItemTextPayload(
             target: target, clipboard: text, x: position.x, y: position.y, focusOverlay: focusOverlay)))
         if focusOverlay && overlay.wasUsedRecently {

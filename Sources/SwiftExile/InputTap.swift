@@ -124,15 +124,18 @@ final class KeySynthesizer {
     private let source = CGEventSource(stateID: .privateState)
     private var heldModifiers: Set<String> = []
 
-    func post(_ steps: [KeyStep]) {
-        for step in steps { post(step) }
+    /// - Parameter alsoHeld: modifiers the user is physically holding; they are included in the
+    ///   flags of every event so the game (and Wine, which re-derives modifier state from each
+    ///   event's flags) never sees them released.
+    func post(_ steps: [KeyStep], alsoHeld: Set<String> = []) {
+        for step in steps { post(step, alsoHeld: alsoHeld) }
     }
 
-    func tap(_ key: String) {
-        post([KeyStep(key, down: true), KeyStep(key, down: false)])
+    func tap(_ key: String, alsoHeld: Set<String> = []) {
+        post([KeyStep(key, down: true), KeyStep(key, down: false)], alsoHeld: alsoHeld)
     }
 
-    private func post(_ step: KeyStep) {
+    private func post(_ step: KeyStep, alsoHeld: Set<String>) {
         guard let code = KeyNames.macKeyCode(for: step.key),
               let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: step.down)
         else { return }
@@ -142,10 +145,11 @@ final class KeySynthesizer {
             event.type = .flagsChanged
         }
         // Explicit flags on every event: the game (and Wine) read modifiers from the event.
+        let modifiers = heldModifiers.union(alsoHeld)
         var flags: CGEventFlags = []
-        if heldModifiers.contains("Ctrl") { flags.insert(.maskControl) }
-        if heldModifiers.contains("Alt") { flags.insert(.maskAlternate) }
-        if heldModifiers.contains("Shift") { flags.insert(.maskShift) }
+        if modifiers.contains("Ctrl") { flags.insert(.maskControl) }
+        if modifiers.contains("Alt") { flags.insert(.maskAlternate) }
+        if modifiers.contains("Shift") { flags.insert(.maskShift) }
         event.flags = flags
         event.setIntegerValueField(.eventSourceUserData, value: InputTap.syntheticMarker)
         event.post(tap: .cghidEventTap)

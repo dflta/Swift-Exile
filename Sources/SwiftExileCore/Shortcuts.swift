@@ -146,12 +146,30 @@ public enum KeySequences {
     }
 
     /// The copy chord pressed down before tapping C, and released 10 ms after
-    /// (`pressKeysToCopyItemText`, `Shortcuts.ts:293-324`). On macOS upstream deliberately
-    /// re-toggles modifiers the user is already holding (`:299-306`), so nothing is filtered.
+    /// (`pressKeysToCopyItemText`, `Shortcuts.ts:293-324`).
     public static func copyItemModifiers(showModsKey: String) -> [String] {
         KeyNames.mergeHotkeys("Ctrl + C", showModsKey)
             .components(separatedBy: " + ")
             .filter { $0 != "C" }
+    }
+
+    /// Which copy-chord modifiers to press, given those the user is still holding (hold-mode
+    /// hotkeys keep their modifiers, e.g. Alt in `Alt + D`).
+    ///
+    /// Upstream re-presses held modifiers on macOS (`Shortcuts.ts:299-306`), a workaround for the
+    /// native client. Under Wine that is unnecessary and harmful: the extra Option press/release
+    /// while the user holds Option looks like a double-tap to other apps (seen: Claude Desktop's
+    /// quick entry opened). With `retoggleHeld == false`, held modifiers are not pressed again;
+    /// they stay in the flags of every synthesized event, so the game still sees them.
+    public static func copyItemModifiersToPress(showModsKey: String, heldModifiers: Set<String>, retoggleHeld: Bool) -> [String] {
+        copyItemModifiers(showModsKey: showModsKey).filter { retoggleHeld || !heldModifiers.contains($0) }
+    }
+
+    /// Modifiers the user keeps holding after a hotkey fires: all of them with `keepModKeys`, none otherwise
+    /// (the others are released right after the hotkey, `releaseAfterHotkey`).
+    public static func heldModifiers(after shortcut: String, keepModKeys: Bool) -> Set<String> {
+        guard keepModKeys else { return [] }
+        return Set(shortcut.components(separatedBy: " + ").filter(KeyNames.isModifier))
     }
 }
 

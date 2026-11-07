@@ -13,7 +13,6 @@ final class OverlayPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        level = .screenSaver // parity with setAlwaysOnTop(true, 'screen-saver')
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         hidesOnDeactivate = false
         isFloatingPanel = true
@@ -21,6 +20,16 @@ final class OverlayPanel: NSPanel {
         ignoresMouseEvents = true
         isReleasedWhenClosed = false
         animationBehavior = .none
+        // Must come after `isFloatingPanel`, which resets the level to `.floating` (3). Under Wine
+        // the game raises its borderless fullscreen window to layer 26 (above the menu bar) while
+        // it is frontmost, so a floating overlay ends up hidden behind it.
+        level = .screenSaver // parity with setAlwaysOnTop(true, 'screen-saver')
+    }
+
+    /// Keep the overlay above the game even if something resets the level.
+    override func orderFrontRegardless() {
+        if level != .screenSaver { level = .screenSaver }
+        super.orderFrontRegardless()
     }
 
     // Non-activating panels can take keyboard focus without activating the app, so the game
