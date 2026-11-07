@@ -2,11 +2,11 @@
 
 A native macOS host for [Exiled Exchange 2](https://github.com/Kvan7/Exiled-Exchange-2) by Kvan7, itself a fork of [Awakened PoE Trade](https://github.com/SnosMe/awakened-poe-trade) by SnosMe.
 
-The entire user interface and item parser come from Exiled Exchange 2, **unchanged**. SwiftExile replaces only the Electron shell with a Swift/AppKit app that serves the renderer and shows it in `WKWebView`. Upstream is included as a git submodule in [`upstream/`](upstream), so every build states exactly which upstream commit it uses.
+SwiftExile replaces the Electron shell with a native Swift app and is moving the user interface to native SwiftUI, starting with the price check. Until each part is rebuilt, the overlay runs Exiled Exchange 2's own web UI and item parser, **unchanged**, in `WKWebView`. Upstream is included as a git submodule in [`upstream/`](upstream), so every build states exactly which upstream commit it uses.
 
 Not affiliated with or endorsed by Grinding Gear Games.
 
-> **Status:** early prototype (day 1). The renderer runs in a normal window; the game overlay, hotkeys, and price-check flow are not implemented yet.
+> **Status:** early prototype (day 2). Native SwiftUI menu bar item and Settings window; the overlay follows the game window (tested with the Windows client under NotProton/CrossOver). Hotkeys and the native price check are not implemented yet; the overlay still shows Exiled Exchange 2's web widgets, which will be replaced by SwiftUI step by step.
 
 ## Build
 

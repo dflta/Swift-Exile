@@ -16,6 +16,8 @@ struct LaunchOptions {
     var quitAfter: Double?
     /// Development check: triggers the renderer's config save before the snapshot.
     var selfTest = false
+    /// Development check: toggle the overlay at this many seconds, and back 3 s later.
+    var toggleAt: Double?
 
     static func parse(
         arguments: [String] = CommandLine.arguments,
@@ -53,6 +55,8 @@ struct LaunchOptions {
                 options.quitAfter = Double(value ?? "")
             case "--selftest":
                 options.selfTest = true
+            case "--toggle-at":
+                options.toggleAt = Double(value ?? "")
             default:
                 break
             }

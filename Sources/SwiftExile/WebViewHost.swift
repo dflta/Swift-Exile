@@ -6,7 +6,7 @@ import WebKit
 final class WebViewHost: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     let webView: WKWebView
 
-    init(userAgentSuffix: String) {
+    init(userAgentSuffix: String, transparent: Bool) {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.applicationNameForUserAgent = userAgentSuffix
@@ -19,6 +19,11 @@ final class WebViewHost: NSObject, WKUIDelegate, WKNavigationDelegate, WKScriptM
         webView.uiDelegate = self
         webView.navigationDelegate = self
         webView.isInspectable = true // Safari ▸ Develop menu, like Electron's toggleDevTools
+        if transparent {
+            // No public API for a transparent WKWebView on macOS; this KVC key is widely used (risk R7).
+            webView.setValue(false, forKey: "drawsBackground")
+            webView.underPageBackgroundColor = .clear
+        }
     }
 
     func load(_ url: URL) {

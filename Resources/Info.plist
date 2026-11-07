@@ -2,13 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleIdentifier</key>
-	<string>com.dflta.SwiftExile</string>
-	<key>CFBundleName</key>
-	<string>SwiftExile</string>
 	<key>CFBundleDisplayName</key>
 	<string>SwiftExile</string>
 	<key>CFBundleExecutable</key>
+	<string>SwiftExile</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.dflta.SwiftExile</string>
+	<key>CFBundleName</key>
 	<string>SwiftExile</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
@@ -16,23 +18,22 @@
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
+	<key>EE2UpstreamVersion</key>
+	<string>unknown</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
-	<key>NSHighResolutionCapable</key>
+	<key>LSUIElement</key>
 	<true/>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- The renderer is served from http://localhost by the app itself. -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>SwiftExile is built on Exiled Exchange 2 (Kvan7) and Awakened PoE Trade (SnosMe). MIT License.</string>
-	<key>EE2UpstreamVersion</key>
-	<string>unknown</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 </dict>
 </plist>
