@@ -48,6 +48,14 @@ import {
 import augmentSupplement from "./augment-supplement.json";
 import { applyCatalyst, getItemEditorType } from "@/web/price-check/item-editor/item-editor";
 import { getCategoryGroups, useAugment } from "@/web/price-check/item-editor/augment";
+import { ARMOUR } from "@/parser/meta";
+import { itemIsModifiable } from "@/parser/ParsedItem";
+import {
+  groupLinesByMod,
+  isModInfoLine,
+  parseModInfoLine,
+  parseModType,
+} from "@/parser/advanced-mod-desc";
 import { ARMOUR, ItemEditorType, WEAPON } from "@/parser/meta";
 import { itemIsModifiable, type EditorItem } from "@/parser/ParsedItem";
 
@@ -961,4 +969,274 @@ async function loadCurrencyIcons() {
 
 function poeHost() {
   return getTradeEndpoint();
+}
+
+// MARK: Item check
+
+/** Item info for the native item check (upstream's ItemInfo.vue and hotkeyable-actions.ts), plus the
+ *  item's modifiers as the game describes them with advanced descriptions (name, tier, lines). */
+export function itemInfo(clipboard: string): string {
+  const parsed = parseClipboard(clipboard);
+  if (parsed.isErr()) return unknownItemInfo(clipboard) ?? json({ error: String(parsed.error) });
+  const item = parsed.value;
+  const { category, rarity } = item;
+  // Maps, contracts, and logbooks get Exiled Exchange 2's map check (WidgetItemCheck.vue isMapLike).
+  const mapLike =
+    (category === ItemCategory.Map && rarity !== ItemRarity.Unique) ||
+    category === ItemCategory.HeistContract ||
+    category === ItemCategory.HeistBlueprint ||
+    category === ItemCategory.Invitation ||
+    item.info.refName === "Expedition Logbook";
+  if (mapLike) return json({ mapLike: true });
+
+  const language = AppConfig().language;
+  const poedb = poe2dbPath(item);
+  const name = JSON.stringify(item.info.name);
+  const note = item.note ? JSON.stringify(item.note) : null;
+  const both = (AppConfig<{ samePricedType?: string }>("item-check")?.samePricedType ?? "both") === "both";
+
+  const as = item.weaponAS;
+  const phys = as ? Math.round(as * (item.weaponPHYSICAL ?? 0)) : null;
+  const elem = as ? Math.round(as * (item.weaponELEMENTAL ?? 0)) : null;
+
+  return json({
+    item: describeItem(item),
+    title: itemTitle(item),
+    links: {
+      wiki: `https://www.poe2wiki.net/wiki/${encodeURIComponent(item.info.refName.replaceAll(" ", "_"))}`,
+      poedb: poedb ? `https://poe2db.tw/${POEDB_LANGS[language] ?? "us"}/${poedb}` : null,
+      craftOfExile:
+        language === "en" && item.info.craftable && itemIsModifiable(item)
+          ? `https://craftofexile.com/?game=poe2&eimport=${encodeURIComponent(item.rawText)}`
+          : null,
+    },
+    stashSearch: name,
+    samePricedSearch: note ? (both && note.length + name.length < 51 ? `${note}${name}` : note) : null,
+    note: item.note ?? null,
+    weapon: as
+      ? {
+          physicalDps: phys,
+          elementalDps: elem,
+          totalDps: (phys ?? 0) + (elem ?? 0),
+          attacksPerSecond: as,
+          critChance: item.weaponCRIT ?? null,
+        }
+      : null,
+    defences: describeDefences(item),
+    requires: item.requires ?? null,
+    skills: grantedSkills(item.rawText),
+    mods: describeModLines(item.rawText),
+    mirrored: item.isMirrored ?? false,
+    fractured: item.isFractured ?? false,
+    sanctified: item.isSanctified ?? false,
+  });
+}
+
+/** "Level 11 Bone Blast" for each "Grants Skill: …" line. */
+function grantedSkills(rawText: string): string[] {
+  const prefix = Data.CLIENT_STRINGS.GRANTS_SKILL;
+  return rawText
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => line.slice(prefix.length).trim());
+}
+
+/** Items the parser doesn't know (quest items, new item kinds): just the name and a wiki link. */
+function unknownItemInfo(clipboard: string): string | null {
+  const _$ = Data.CLIENT_STRINGS;
+  const header = (parserInternals.itemTextToSections(clipboard) as string[][])[0] ?? [];
+  const rarityIndex = header.findIndex((line) => line.startsWith(_$.RARITY));
+  if (rarityIndex < 0) return null;
+  const names = header.slice(rarityIndex + 1).filter((line) => line !== _$.CANNOT_USE_ITEM);
+  if (!names.length) return null;
+  const name = names[names.length - 1];
+  const itemClass = header.find((line) => line.startsWith(_$.ITEM_CLASS))?.slice(_$.ITEM_CLASS.length) ?? null;
+  return json({
+    known: false,
+    item: {
+      name,
+      refName: name,
+      namespace: "",
+      icon: "",
+      rarity: header[rarityIndex].slice(_$.RARITY.length),
+      category: itemClass,
+      itemLevel: null,
+      quality: null,
+      gemLevel: null,
+      stackSize: null,
+      corrupted: false,
+      unidentified: false,
+    },
+    title: names.length > 1 ? names[0] : null,
+    links: {
+      wiki: `https://www.poe2wiki.net/wiki/${encodeURIComponent(name.replaceAll(" ", "_"))}`,
+      poedb: null,
+      craftOfExile: null,
+    },
+    stashSearch: JSON.stringify(name),
+    samePricedSearch: null,
+    note: null,
+    weapon: null,
+    defences: null,
+    requires: null,
+    skills: grantedSkills(clipboard),
+    mods: describeModLines(clipboard),
+    mirrored: false,
+    fractured: false,
+    sanctified: false,
+  });
+}
+
+/** The name a magic or rare item has on its own (the base type is `item.info.name`). */
+function itemTitle(item: ParsedItem): string | null {
+  if (item.rarity !== ItemRarity.Rare && item.rarity !== ItemRarity.Magic) return null;
+  const header = (parserInternals.itemTextToSections(item.rawText) as string[][])[0] ?? [];
+  const names = header.slice(2).filter((line) => line !== Data.CLIENT_STRINGS.CANNOT_USE_ITEM);
+  if (item.rarity === ItemRarity.Rare) return names.length >= 2 ? names[0] : null;
+  return names[0] && names[0] !== item.info.name ? names[0] : null;
+}
+
+function describeDefences(item: ParsedItem) {
+  // Upstream's parser drops a unique's defences (its price check searches by name); read them here.
+  const fromText = (prefix: string) => {
+    for (const line of item.rawText.split(/\r?\n/)) {
+      if (line.startsWith(prefix)) return parseInt(line.slice(prefix.length), 10);
+    }
+    return null;
+  };
+  const unique = item.rarity === ItemRarity.Unique;
+  const _$ = Data.CLIENT_STRINGS;
+  const values = {
+    armour: item.armourAR ?? (unique ? fromText(_$.ARMOUR) : null),
+    evasion: item.armourEV ?? (unique ? fromText(_$.EVASION) : null),
+    energyShield: item.armourES ?? (unique ? fromText(_$.ENERGY_SHIELD) : null),
+    ward: item.armourRW ?? (unique ? fromText(_$.RUNIC_WARD) : null),
+    block: item.armourBLOCK ?? (unique ? fromText(_$.BLOCK_CHANCE) : null),
+  };
+  return Object.values(values).some((v) => v != null) ? values : null;
+}
+
+/** The modifier blocks of copied item text: each "{ … }" line with the lines under it. */
+function describeModLines(rawText: string) {
+  const sections = parserInternals.itemTextToSections(rawText) as string[][];
+  const mods: Array<{
+    type: string;
+    generation: string | null;
+    name: string | null;
+    tier: number | null;
+    rank: number | null;
+    tags: string[];
+    lines: string[];
+  }> = [];
+  for (const section of sections) {
+    if (!section.length || !isModInfoLine(section[0])) continue;
+    for (const { modLine, statLines } of groupLinesByMod(section)) {
+      const { modType, lines } = parseModType(statLines);
+      let info;
+      try {
+        info = parseModInfoLine(modLine, modType);
+      } catch {
+        info = { type: modType, tags: [] as string[] };
+      }
+      mods.push({
+        type: info.type,
+        generation: info.generation ?? null,
+        name: info.name ?? null,
+        tier: info.tier ?? null,
+        rank: info.rank ?? null,
+        tags: info.tags ?? [],
+        lines,
+      });
+    }
+  }
+  return mods;
+}
+
+// Same as upstream's hotkeyable-actions.ts (not exported there).
+const POEDB_LANGS: Record<string, string> = {
+  en: "us",
+  ru: "ru",
+  "cmn-Hant": "tw",
+  ko: "kr",
+  ja: "jp",
+  de: "de",
+  es: "sp",
+  pt: "pt",
+  fr: "fr",
+};
+
+const POE2DB_CONVERSIONS = new Map<string, string>([
+  [ItemCategory.Claw, "Claws"],
+  [ItemCategory.Dagger, "Daggers"],
+  [ItemCategory.Wand, "Wands"],
+  [ItemCategory.OneHandedSword, "One_Hand_Swords"],
+  [ItemCategory.OneHandedAxe, "One_Hand_Axes"],
+  [ItemCategory.OneHandedMace, "One_Hand_Maces"],
+  [ItemCategory.Sceptre, "Sceptres"],
+  [ItemCategory.Spear, "Spears"],
+  [ItemCategory.Flail, "Flails"],
+  [ItemCategory.Bow, "Bows"],
+  [ItemCategory.Staff, "Staves"],
+  [ItemCategory.TwoHandedSword, "Two_Hand_Swords"],
+  [ItemCategory.TwoHandedAxe, "Two_Hand_Axes"],
+  [ItemCategory.TwoHandedMace, "Two_Hand_Maces"],
+  [ItemCategory.Warstaff, "Quarterstaves"],
+  [ItemCategory.Crossbow, "Crossbows"],
+  [ItemCategory.Talisman, "Talismans"],
+  [ItemCategory.Amulet, "Amulets"],
+  [ItemCategory.Ring, "Rings"],
+  [ItemCategory.Belt, "Belts"],
+  [ItemCategory.BodyArmour, "Body_Armours"],
+  [ItemCategory.Helmet, "Helmets"],
+  [ItemCategory.Gloves, "Gloves"],
+  [ItemCategory.Boots, "Boots"],
+  [ItemCategory.Quiver, "Quivers"],
+  [ItemCategory.Shield, "Shields"],
+  [ItemCategory.Focus, "Foci"],
+  [ItemCategory.Buckler, "Bucklers"],
+  ["Ruby", "Ruby"],
+  ["Emerald", "Emerald"],
+  ["Sapphire", "Sapphire"],
+  ["Time-Lost Ruby", "Time-Lost_Ruby"],
+  ["Time-Lost Emerald", "Time-Lost_Emerald"],
+  ["Time-Lost Sapphire", "Time-Lost_Sapphire"],
+  ["Life Flask", "Life_Flasks"],
+  ["Mana Flask", "Mana_Flasks"],
+  ["Charm", "Charms"],
+  ["Urn Relic", "Urn_Relic"],
+  ["Amphora Relic", "Amphora_Relic"],
+  ["Vase Relic", "Vase_Relic"],
+  ["Seal Relic", "Seal_Relic"],
+  ["Coffer Relic", "Coffer_Relic"],
+  ["Tapestry Relic", "Tapestry_Relic"],
+  ["Incense Relic", "Incense_Relic"],
+  ["Breach Precursor Tablet", "Breach_Precursor_Tablet"],
+  ["Expedition Precursor Tablet", "Expedition_Precursor_Tablet"],
+  ["Delirium Precursor Tablet", "Delirium_Precursor_Tablet"],
+  ["Ritual Precursor Tablet", "Ritual_Precursor_Tablet"],
+  ["Precursor Tablet", "Precursor_Tablet"],
+  ["Overseer Precursor Tablet", "Overseer_Precursor_Tablet"],
+  ["Waystones(Low)", "Waystones_low_tier"],
+  ["Waystones(Mid)", "Waystones_mid_tier"],
+  ["Waystones(Top)", "Waystones_top_tier"],
+]);
+
+function encodePoe2dbUri(text: string) {
+  return text.replaceAll(/ /g, "_").replaceAll(/'/g, "");
+}
+
+function poe2dbPath(item: ParsedItem): string | undefined {
+  const category = item.category;
+  const refName = item.info.refName;
+  if (!category) return;
+  if (item.rarity === ItemRarity.Unique) return encodePoe2dbUri(refName);
+  if (POE2DB_CONVERSIONS.has(refName)) return POE2DB_CONVERSIONS.get(refName)! + "#ModifiersCalc";
+  if (!POE2DB_CONVERSIONS.has(category)) return encodePoe2dbUri(refName);
+  let path = POE2DB_CONVERSIONS.get(category)!;
+  if (ARMOUR.has(category) && !(category === ItemCategory.Buckler || category === ItemCategory.Focus)) {
+    if (item.armourAR) path += "_str";
+    if (item.armourEV) path += "_dex";
+    if (item.armourES) path += "_int";
+  }
+  return path + "#ModifiersCalc";
 }

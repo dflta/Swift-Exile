@@ -30,6 +30,12 @@ import Testing
         ])
     }
 
+    @Test func typedStashSearchSkipsTheClipboard() {
+        #expect(TextBox.stashSearchTyped("\"Regal Orb\"") == [
+            .tap("F", modifiers: ["Ctrl"]), .typeText("\"Regal Orb\""), .tap("Enter"),
+        ])
+    }
+
     @Test func stashSearchUsesCtrlF() {
         #expect(TextBox.stashSearch("rarity: unique", command: "Meta") == [
             .setClipboard("rarity: unique"), .tap("F", modifiers: ["Ctrl"]), .tap("V", modifiers: ["Meta"]), .tap("Enter"),

@@ -51,4 +51,18 @@ import Testing
         #expect(reloaded.stashSearchEntries(widgetID: 4).first?.text == "x") // the other widget untouched
         #expect(reloaded.widgets("stash-search").count == 2)
     }
+
+    @Test func describesWhatUsesAHotkey() throws {
+        let settings = try #require(OverlaySettings(json: #"""
+        {"overlayKey":"Shift + Space","commands":[{"text":"/hideout","hotkey":"F5","send":true}],
+         "widgets":[{"wmType":"price-check","wmId":1,"hotkey":"D","hotkeyHold":"Alt","hotkeyLocked":"Ctrl + D"},
+                    {"wmType":"item-check","wmId":2,"hotkey":"Shift + T","wikiKey":"Shift + T"}]}
+        """#))
+        let uses = settings.hotkeyUses()
+        #expect(uses["Alt + D"] == ["Price check"])
+        #expect(uses["Ctrl + D"] == ["Price check (without auto-hide)"])
+        #expect(uses["F5"] == ["Chat command “/hideout”"])
+        #expect(Set(uses["Shift + T"] ?? []) == ["Item check", "Open on the wiki"])
+        #expect(uses["Shift + Space"] == ["Overlay"])
+    }
 }

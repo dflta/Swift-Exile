@@ -41,10 +41,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var nativePriceCheck: NativePriceCheckController?
+    private var itemCheck: ItemCheckController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installSignalHandlers()
-        UserDefaults.standard.register(defaults: [ShortcutController.nativePriceCheckDefaultsKey: true])
+        UserDefaults.standard.register(defaults: [ShortcutController.nativePriceCheckDefaultsKey: true,
+                                                  ShortcutController.nativeItemCheckDefaultsKey: true])
         // Not during scripted runs (snapshots, --quit-after): Sparkle may ask about automatic checks.
         if options.quitAfter == nil && options.nativeSnapshotPath == nil { updates.start() }
         // Info.plist sets LSUIElement (menu bar app, no Dock icon). The debug browser window
@@ -200,6 +202,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         native.overlayWindowNumber = { [weak overlay] in overlay?.panel.windowNumber ?? 0 }
         shortcuts.nativePriceCheck = native
         nativePriceCheck = native
+        let itemCheck = ItemCheckController(engine: engine)
+        itemCheck.isGame = { [weak self] pid in self?.status.gamePid == pid }
+        itemCheck.overlayWindowNumber = { [weak overlay] in overlay?.panel.windowNumber ?? 0 }
+        itemCheck.onStashSearch = { [weak shortcuts] text in shortcuts?.stashSearchFromOverlay(text) }
+        itemCheck.onPriceCheck = { [weak shortcuts] text, cursor in
+            shortcuts?.showNativePriceCheck(text: text, position: cursor, focus: true, holdKey: nil,
+                                            fallbackArea: NSScreen.screens.first?.frame)
+        }
+        shortcuts.itemCheck = itemCheck
+        self.itemCheck = itemCheck
         Task { _ = try? await engine.start() } // warm up: item data and prices load before the first check
         self.webHost = webHost
         self.tracker = tracker
@@ -372,6 +384,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
                 print("[snapshot] settings pages saved to \(folder)")
+            }
+        }
+        if let path = options.debugItemCheckPath {
+            DispatchQueue.main.asyncAfter(deadline: .now() + options.debugItemAt) { [weak self] in
+                guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return }
+                self?.shortcuts?.showNativeItemCheck(text: text, position: CGPoint(x: 1800, y: 600),
+                                                     fallbackArea: NSScreen.screens.first?.frame)
+            }
+        }
+        if let path = options.itemCheckSnapshotPath {
+            DispatchQueue.main.asyncAfter(deadline: .now() + options.snapshotDelay) { [weak self] in
+                let saved = self?.itemCheck?.snapshot(to: URL(fileURLWithPath: path)) ?? false
+                print("[snapshot] item check \(saved ? "saved \(path)" : "failed")")
             }
         }
         if let path = options.nativeSnapshotPath {

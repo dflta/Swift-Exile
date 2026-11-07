@@ -143,6 +143,41 @@ public struct OverlaySettings: Equatable, Sendable {
 
     /// The same `HostConfig` the overlay would send, computed from the file. SwiftExile uses it when
     /// settings change in the native window, without waiting for the web overlay.
+    /// What each hotkey does, in words ("Price check", "Chat command “/hideout”"…), for telling the
+    /// user a hotkey is already taken.
+    public func hotkeyUses() -> [String: [String]] {
+        var uses: [String: [String]] = [:]
+        for case .object(let entry) in hostConfig().shortcuts {
+            guard let shortcut = Self.string(entry["shortcut"]), case .object(let action)? = entry["action"] else { continue }
+            uses[shortcut, default: []].append(Self.describe(action))
+        }
+        return uses
+    }
+
+    static func describe(_ action: [String: JSONValue]) -> String {
+        let target = string(action["target"]) ?? ""
+        switch string(action["type"]) {
+        case "copy-item":
+            switch target {
+            case "price-check": return bool(action["focusOverlay"], default: false) ? "Price check (without auto-hide)" : "Price check"
+            case "item-check": return "Item check"
+            case "open-wiki": return "Open on the wiki"
+            case "open-poedb": return "Open on poe2db"
+            case "open-craft-of-exile": return "Open on Craft of Exile"
+            case "search-similar": return "Find in stash"
+            case "search-same-priced": return "Find same price in stash"
+            case "log-item": return "Library: log item"
+            default: return target
+            }
+        case "toggle-overlay": return "Overlay"
+        case "paste-in-chat": return "Chat command “\(string(action["text"]) ?? "")”"
+        case "stash-search": return "Stash search “\(string(action["text"]) ?? "")”"
+        case "ocr-text": return "Heist gems"
+        case "trigger-event": return target.hasPrefix("stopwatch") ? "Stopwatch" : "Delve grid"
+        default: return string(action["type"]) ?? "Another action"
+        }
+    }
+
     public func hostConfig() -> HostConfig {
         var actions: [JSONValue] = []
         func add(_ shortcut: String?, _ action: [String: JSONValue], keepModKeys: Bool = false) {

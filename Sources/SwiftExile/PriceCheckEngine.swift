@@ -70,6 +70,12 @@ final class PriceCheckEngine: NSObject, WKNavigationDelegate, WKScriptMessageHan
                               ["text": clipboard, "advanced": advanced])
     }
 
+    /// The native item check's data for copied item text.
+    func itemInfo(clipboard: String) async throws -> ItemCheckResult {
+        try await start()
+        return try await call(ItemCheckResult.self, "return SwiftExileEngine.itemInfo(text)", ["text": clipboard])
+    }
+
     func setStat(index: Int, disabled: Bool, min: Double?, max: Double?) async throws -> FilterState {
         try await call(FilterState.self, "return SwiftExileEngine.setStat(index, disabled, min, max)",
                        ["index": index, "disabled": disabled, "min": Self.orNull(min), "max": Self.orNull(max)])

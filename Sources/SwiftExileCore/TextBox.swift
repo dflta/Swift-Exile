@@ -6,6 +6,8 @@ import Foundation
 public enum TextBoxStep: Equatable, Sendable {
     case setClipboard(String)
     case tap(String, modifiers: [String] = [])
+    /// Types the text key by key (no clipboard).
+    case typeText(String)
 }
 
 /// Port of `main/src/shortcuts/text-box.ts`: the key sequences for "paste in chat" and stash search.
@@ -56,6 +58,16 @@ public enum TextBox {
             .setClipboard(text),
             .tap("F", modifiers: ["Ctrl"]),
             .tap("V", modifiers: [command]),
+            .tap("Enter"),
+        ]
+    }
+
+    /// The same stash search typed key by key instead of pasted: right after the game copied an item,
+    /// Wine still gives the game its own clipboard (the item) for a moment.
+    public static func stashSearchTyped(_ text: String) -> [TextBoxStep] {
+        [
+            .tap("F", modifiers: ["Ctrl"]),
+            .typeText(text),
             .tap("Enter"),
         ]
     }

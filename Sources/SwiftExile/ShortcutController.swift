@@ -30,6 +30,10 @@ final class ShortcutController {
     /// Native SwiftUI price check (preview). When enabled, price-check items go there instead of
     /// to Exiled Exchange 2's web widget.
     var nativePriceCheck: NativePriceCheckController?
+    var itemCheck: ItemCheckController?
+    /// When the game last put item text on the clipboard, and the pasteboard's change count then.
+    private var lastGameCopy: (at: Date, changeCount: Int)?
+    static let nativeItemCheckDefaultsKey = "nativeItemCheck"
     static let nativePriceCheckDefaultsKey = "nativePriceCheck"
     private enum AreaTarget { case renderer, native }
     private var areaTarget: AreaTarget = .renderer
@@ -145,7 +149,7 @@ final class ShortcutController {
             // Hotkeys are registered only while the game is active (Shortcuts.ts:61-71), and also
             // while the native price check has focus: it's our panel, with the game right behind it,
             // so the next item can be checked without closing it first.
-            let nativeFocused = nativePriceCheck?.isKey ?? false
+            let nativeFocused = (nativePriceCheck?.isKey ?? false) || (itemCheck?.isKey ?? false)
             guard overlay.isGameActive || nativeFocused || overlay.companionHasFocus, !event.command,
                   let action = active[hotkey] else { return false }
             // While SwiftExile's settings (or the bar's field) have focus inside the open overlay, only
@@ -158,6 +162,7 @@ final class ShortcutController {
                 if nativeFocused {
                     // Give focus back to the game first, so the copy chord reaches it, not the panel.
                     nativePriceCheck?.releaseFocus(toGame: status.gamePid)
+                    itemCheck?.releaseFocus(toGame: status.gamePid)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in self?.run(action) }
                 } else {
                     DispatchQueue.main.async { [weak self] in self?.run(action) }
@@ -183,7 +188,8 @@ final class ShortcutController {
         case .pasteInChat(let text, let send):
             runTextBox(TextBox.typeInChat(text, send: send, command: status.gameFlavor.commandModifier), held: held)
         case .stashSearch(let text):
-            runTextBox(TextBox.stashSearch(text, command: status.gameFlavor.commandModifier), held: held)
+            runTextBox(TextBox.stashSearch(text, command: status.gameFlavor.commandModifier), held: held,
+                       typed: TextBox.stashSearchTyped(text))
         case .ocrText:
             // Upstream only runs heist-gem OCR on Windows (Shortcuts.ts:249).
             log("warn [Shortcuts] \"\(entry.shortcut)\": OCR is not implemented on macOS yet")
@@ -200,36 +206,93 @@ final class ShortcutController {
         overlay.focusGame(source: "stash-search")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self else { return }
-            self.runTextBox(TextBox.stashSearch(text, command: self.status.gameFlavor.commandModifier), held: [])
+            self.runTextBox(TextBox.stashSearch(text, command: self.status.gameFlavor.commandModifier), held: [],
+                            typed: TextBox.stashSearchTyped(text))
         }
     }
 
     /// `restoreShortly` (HostClipboard.ts:87-103) around a chat or stash-search macro: ignored while
-    /// one is running (protects against "Too many actions"); the clipboard is restored afterwards
+    /// one is typing (protects against "Too many actions"); the clipboard is restored afterwards
     /// when the "restore clipboard" setting is on.
-    private func runTextBox(_ steps: [TextBoxStep], held: Set<String>) {
-        guard !textBoxBusy else {
-            log("debug [Shortcuts] chat/stash macro ignored: the previous one is still running")
-            return
+    ///
+    /// Under Wine, for about 2 s after the game copies an item, pasting still pastes that item: Wine
+    /// takes a Mac clipboard change into the game's clipboard only on its 2 s check
+    /// (`CLIPBOARD_UPDATE_DELAY` in winemac.drv's clipboard.c). Writing the clipboard while Wine still
+    /// owned it (which should be noticed at once) didn't help in game. So a stash search right after a
+    /// copy is typed key by key instead (`typed`), when the keyboard layout can type it; otherwise
+    /// the macro waits out the rest of those 2 s (`wineClipboardWaitMs`, 2100). A newer macro, or
+    /// another item copy, replaces one that is still waiting.
+    private func runTextBox(_ steps: [TextBoxStep], held: Set<String>, typed: [TextBoxStep]? = nil) {
+        var steps = steps
+        var saved = NSPasteboard.general.string(forType: .string)
+        if let carried = carriedClipboard, Date().timeIntervalSince(carried.at) < 5 {
+            saved = carried.text // what the user had before a macro that was replaced
+        }
+        carriedClipboard = nil
+        if textBoxBusy {
+            guard let waiting = waitingMacro else {
+                log("debug [Shortcuts] chat/stash macro ignored: the previous one is still typing")
+                return
+            }
+            waiting.task.cancel()
+            saved = waiting.saved
+            waitingMacro = nil
+            log("debug [Shortcuts] chat/stash macro replaced one that was still waiting")
         }
         textBoxBusy = true
         // What gets pasted, for when the game refuses a chat message.
         let texts = steps.compactMap { if case .setClipboard(let text) = $0 { return text } else { return nil } }
         log("debug [Shortcuts] chat/stash macro: \(texts.map { "\"\($0)\"" }.joined(separator: ", ")); game in front: \(overlay.isGameActive)")
         let pasteboard = NSPasteboard.general
-        let saved = pasteboard.string(forType: .string)
-        for step in steps {
-            switch step {
-            case .setClipboard(let text):
-                pasteboard.clearContents()
-                pasteboard.setString(text, forType: .string)
-            case .tap(let key, let modifiers):
-                synthesizer.tap(key, modifiers: modifiers, alsoHeld: held)
+        var wait = Duration.zero
+        var typedKeys: [String: [KeyboardLayoutMap.Key]] = [:]
+        let waitMs = UserDefaults.standard.object(forKey: Self.wineClipboardWaitKey) as? Int ?? 2100
+        let sinceCopyMs = lastGameCopy.map { Int(Date().timeIntervalSince($0.at) * 1000) } ?? Int.max
+        if status.gameFlavor.isWine, sinceCopyMs < waitMs {
+            let layout = KeyboardLayoutMap.current()
+            let texts = (typed ?? []).compactMap { if case .typeText(let text) = $0 { return text } else { return nil } }
+            if let typed, let layout, !texts.isEmpty,
+               texts.allSatisfy({ layout.keys(for: $0) != nil }) {
+                steps = typed
+                for text in texts { typedKeys[text] = layout.keys(for: text) }
+                log("debug [Shortcuts] typing the search (the game copied an item \(sinceCopyMs) ms ago, so Wine would still paste it)")
+            } else {
+                wait = .milliseconds(waitMs - sinceCopyMs)
+                log("debug [Shortcuts] waiting \(waitMs - sinceCopyMs) ms for Wine to see the new clipboard (the game copied an item \(sinceCopyMs) ms ago)")
             }
         }
         let delay = TextBox.restoreDelay(isWine: status.gameFlavor.isWine)
         let restore = restoreClipboard
-        Task { @MainActor [weak self] in
+        let synthesizer = synthesizer
+        let task = Task { @MainActor [weak self] in
+            var started = false
+            for step in steps {
+                switch step {
+                case .setClipboard(let text):
+                    pasteboard.clearContents()
+                    pasteboard.setString(text, forType: .string)
+                case .tap(let key, let modifiers):
+                    if !started {
+                        if wait > .zero {
+                            do { try await Task.sleep(for: wait) } catch { return } // replaced: the newer one restores
+                        }
+                        self?.waitingMacro = nil
+                        started = true
+                        // Keys must reach the game, not a SwiftExile panel that just closed or has focus.
+                        await self?.focusGameForTyping()
+                    }
+                    synthesizer.tap(key, modifiers: modifiers, alsoHeld: held)
+                case .typeText(let text):
+                    if !started {
+                        started = true
+                        self?.waitingMacro = nil
+                        await self?.focusGameForTyping()
+                    }
+                    try? await Task.sleep(for: .milliseconds(40)) // the search box opens after Ctrl+F
+                    // All at once: the stash filters as it's typed, so typing slowly shows every step.
+                    for key in typedKeys[text] ?? [] { synthesizer.type(key) }
+                }
+            }
             try? await Task.sleep(for: delay)
             if restore, let saved {
                 pasteboard.clearContents()
@@ -237,10 +300,40 @@ final class ShortcutController {
             }
             self?.textBoxBusy = false
         }
+        if wait > .zero { waitingMacro = (task, saved) }
+    }
+
+    /// A macro still waiting for Wine's clipboard check, and the clipboard to restore after it.
+    private var waitingMacro: (task: Task<Void, Never>, saved: String?)?
+    /// The clipboard from before a cancelled macro, for the next one to restore.
+    private var carriedClipboard: (text: String?, at: Date)?
+    static let wineClipboardWaitKey = "wineClipboardWaitMs"
+
+    /// Another item was copied while a macro waits: the game's clipboard changed again, so that macro
+    /// would paste the item. Drop it (a new search follows if the copy was for one).
+    private func cancelWaitingMacro() {
+        guard let waiting = waitingMacro else { return }
+        waiting.task.cancel()
+        waitingMacro = nil
+        textBoxBusy = false
+        carriedClipboard = (waiting.saved, Date())
+        log("debug [Shortcuts] chat/stash macro dropped: another item was copied while it waited")
+    }
+
+    /// Gives keyboard focus back to the game if a SwiftExile window has it.
+    private func focusGameForTyping() async {
+        guard NSApp.keyWindow != nil || NSApp.isActive else { return }
+        NSApp.deactivate()
+        if let pid = status.gamePid, let game = NSRunningApplication(processIdentifier: pid) {
+            NSApp.yieldActivation(to: game)
+            game.activate(from: .current, options: [])
+        }
+        try? await Task.sleep(for: .milliseconds(80))
     }
 
     /// Copy-item flow (`Shortcuts.ts:215-244`).
     private func copyItem(target: String, focusOverlay: Bool, held: Set<String>) {
+        cancelWaitingMacro()
         let position = CGEvent(source: nil)?.location ?? .zero
         let modifiers = KeySequences.copyItemModifiersToPress(
             showModsKey: showModsKey, heldModifiers: held,
@@ -271,11 +364,20 @@ final class ShortcutController {
 
     private func deliverItem(text: String, target: String, position: CGPoint, focusOverlay: Bool, holdKey: String?, startedAt: Date) {
         areaModel.stop()
+        lastGameCopy = (Date(), NSPasteboard.general.changeCount)
         let advanced = text.contains("{ ") ? "with advanced mod descriptions" : "without advanced mod descriptions"
         log("debug [Shortcuts] item copied in \(Int(Date().timeIntervalSince(startedAt) * 1000)) ms → \(target), \(advanced)")
         if target == "price-check", showNativePriceCheck(text: text, position: position, focus: focusOverlay, holdKey: holdKey) {
             return
         }
+        if target == "item-check", showNativeItemCheck(text: text, position: position) {
+            return
+        }
+        sendToOverlay(text: text, target: target, position: position, focusOverlay: focusOverlay)
+    }
+
+    /// Exiled Exchange 2's widgets get the item (`MAIN->CLIENT::item-text`).
+    private func sendToOverlay(text: String, target: String, position: CGPoint, focusOverlay: Bool) {
         send(.lastActive, try? IpcMessage(.itemText, ItemTextPayload(
             target: target, clipboard: text, x: position.x, y: position.y, focusOverlay: focusOverlay)))
         if focusOverlay && overlay.wasUsedRecently {
@@ -306,11 +408,34 @@ final class ShortcutController {
         else { return false }
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         let game = ScreenCoordinates.cocoaRect(fromQuartz: gameCocoa, primaryHeight: primaryHeight) // involution: Cocoa → Quartz
+        itemCheck?.hide()
         native.show(clipboard: text, cursor: position, game: game, focus: focus)
         if !focus {
             // Same behavior as upstream's track-area for the web widget (PriceCheckWindow.vue:265-288).
             areaTarget = .native
             areaModel.start(WidgetAreaModel.Area(holdKey: holdKey ?? "", closeThreshold: 40, from: position, rect: native.areaRect))
+        }
+        return true
+    }
+
+    /// Shows the item in the native item check if it's on. Maps and items the parser doesn't read go
+    /// to Exiled Exchange 2 once the engine has looked at them. Returns false to send it there now.
+    /// - Parameter fallbackArea: Cocoa rect to use when no game window is attached (debug runs).
+    @discardableResult
+    func showNativeItemCheck(text: String, position: CGPoint, fallbackArea: CGRect? = nil) -> Bool {
+        guard let itemCheck,
+              UserDefaults.standard.bool(forKey: Self.nativeItemCheckDefaultsKey),
+              let gameCocoa = status.gameRect ?? fallbackArea
+        else { return false }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let game = ScreenCoordinates.cocoaRect(fromQuartz: gameCocoa, primaryHeight: primaryHeight) // involution: Cocoa → Quartz
+        Task { [weak self] in
+            guard let self else { return }
+            if await itemCheck.show(clipboard: text, cursor: position, game: game) {
+                self.nativePriceCheck?.hide()
+            } else {
+                self.sendToOverlay(text: text, target: "item-check", position: position, focusOverlay: true)
+            }
         }
         return true
     }
@@ -325,7 +450,10 @@ final class ShortcutController {
         if event.kind == .moved && !event.alt {
             applyAlt(altModel.otherInput())
         }
-        if event.kind == .down { nativePriceCheck?.mouseDown(atQuartz: event.location) }
+        if event.kind == .down {
+            nativePriceCheck?.mouseDown(atQuartz: event.location)
+            itemCheck?.mouseDown(atQuartz: event.location)
+        }
         guard areaModel.isTracking else { return }
         let effects: [WidgetAreaModel.Effect]
         let interactable = areaTarget == .native ? (nativePriceCheck?.isKey ?? false) : overlay.isInteractable

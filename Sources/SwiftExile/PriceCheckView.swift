@@ -929,7 +929,7 @@ private struct LeagueMenu: View {
 }
 
 /// An image from the PoE CDN (item art, currency icons).
-private struct RemoteIcon: View {
+struct RemoteIcon: View {
     let url: String
     let size: CGFloat
 
@@ -964,6 +964,7 @@ enum ItemColors {
         case "Unique": return Color(red: 0.69, green: 0.38, blue: 0.15)
         case "Rare": return Color(red: 1.0, green: 1.0, blue: 0.47)
         case "Magic": return Color(red: 0.53, green: 0.53, blue: 1.0)
+        case "Quest": return Color(red: 0.29, green: 0.9, blue: 0.23)
         default: return .primary
         }
     }

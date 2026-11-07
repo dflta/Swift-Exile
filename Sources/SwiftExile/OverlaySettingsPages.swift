@@ -48,6 +48,7 @@ extension OverlaySettingsStore {
 
 struct HotkeysPage: View {
     let store: OverlaySettingsStore
+    @AppStorage(ShortcutController.nativeItemCheckDefaultsKey) private var nativeItemCheck = true
 
     var body: some View {
         Form {
@@ -62,13 +63,48 @@ struct HotkeysPage: View {
                         .labelsHidden()
                         .fixedSize()
                         Text("+").foregroundStyle(.secondary)
-                        HotkeyField(hotkey: store.widgetHotkey("price-check", "hotkey"), keyOnly: true)
+                        HotkeyField(hotkey: store.widgetHotkey("price-check", "hotkey"), keyOnly: true) { key in
+                            "\(store.settings.flatMap { OverlaySettings.string($0.widget("price-check")?["hotkeyHold"]) } ?? "Alt") + \(key)"
+                        }
                     }
                 }
                 .help("Hold the modifier while the price check is open; it closes when you release it and move away")
                 LabeledContent("Open without auto-hide") {
                     HotkeyField(hotkey: store.widgetHotkey("price-check", "hotkeyLocked"))
                 }
+            }
+            Section {
+                LabeledContent("Item check") {
+                    HotkeyField(hotkey: store.widgetHotkey("item-check", "hotkey"))
+                }
+                .help("Shows the item's modifiers and tiers, links, and stash searches")
+                Toggle("Native item check", isOn: $nativeItemCheck)
+                    .help("Off: Exiled Exchange 2's item info. Maps and contracts always use Exiled Exchange 2's map check")
+                LabeledContent("Open on the wiki") { HotkeyField(hotkey: store.widgetHotkey("item-check", "wikiKey")) }
+                LabeledContent("Open on poe2db") { HotkeyField(hotkey: store.widgetHotkey("item-check", "poedbKey")) }
+                LabeledContent("Open on Craft of Exile") { HotkeyField(hotkey: store.widgetHotkey("item-check", "craftOfExileKey")) }
+                LabeledContent {
+                    HotkeyField(hotkey: store.widgetHotkey("item-check", "stashSearchKey"))
+                } label: {
+                    Text("Find in stash")
+                    Text("Under Wine the game keeps the copied item on its clipboard for about 2 s, so the name is typed into the stash search instead of pasted. If your keyboard layout can't type it, it's pasted after that wait.")
+                }
+                LabeledContent("Find same price in stash") {
+                    HStack(spacing: 6) {
+                        Picker("Search for", selection: store.widgetText("item-check", "samePricedType", fallback: "both")) {
+                            Text("Price").tag("price")
+                            Text("Price and item").tag("both")
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        HotkeyField(hotkey: store.widgetHotkey("item-check", "samePricedKey"))
+                    }
+                }
+            } header: {
+                Text("Item check")
+            } footer: {
+                Text("Craft of Exile links work with the game in English.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 LabeledContent("Overlay") {
@@ -81,7 +117,7 @@ struct HotkeysPage: View {
             } header: {
                 Text("General")
             } footer: {
-                Text("Hotkeys work while the game is in front. The game's own keys (Ctrl + C, Ctrl + V, Enter, arrow keys…) can't be used. Chat and stash search hotkeys are on their own pages; other Exiled Exchange 2 widgets (item info, map check) are set up in the overlay.")
+                Text("Hotkeys work while the game is in front. The game's own keys (Ctrl + C, Ctrl + V, Enter, arrow keys…) can't be used. Chat and stash search hotkeys are on their own pages; the map check and other Exiled Exchange 2 widgets are set up in the overlay.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if !store.hotkeyProblems.isEmpty {

@@ -27,6 +27,10 @@ struct LaunchOptions {
     var debugNativeItemPath: String?
     /// Development check: render the native price check to this PNG after `snapshotDelay`.
     var nativeSnapshotPath: String?
+    /// Development check: show this file's item in the native item check, and render it to
+    /// `itemCheckSnapshotPath` after `snapshotDelay`.
+    var debugItemCheckPath: String?
+    var itemCheckSnapshotPath: String?
 
     static func parse(
         arguments: [String] = CommandLine.arguments,
@@ -72,6 +76,10 @@ struct LaunchOptions {
                 options.debugNativeItemPath = value
             case "--native-snapshot":
                 options.nativeSnapshotPath = value
+            case "--debug-item-check":
+                options.debugItemCheckPath = value
+            case "--item-check-snapshot":
+                options.itemCheckSnapshotPath = value
             case "--debug-item-repeat":
                 options.debugItemRepeat = Int(value ?? "") ?? 1
             case "--debug-item-at":

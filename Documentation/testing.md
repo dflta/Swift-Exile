@@ -115,6 +115,25 @@ With menu bar ▸ "Native Price Check (Preview)" on (default):
 
 Without the game: `build/SwiftExile.app/Contents/MacOS/SwiftExile --debug-native-item=<item.txt>` shows a saved item.
 
+### Native item check
+
+Set Settings ▸ Hotkeys ▸ Item check first (e.g. Alt + W; it's not set by default).
+
+| # | Step | Expected |
+|---|---|---|
+| I1 | Item check a rare weapon (a wand or staff for its skill) | Panel next to the stash/inventory panel with keyboard focus: the rare's name over its base type, DPS (physical, elemental, total), attacks per second, crit, the skill it grants, requirements; each modifier with P/S and its tier (T1 gold, T2 green), its name, and the roll ranges dimmed |
+| I2 | Item check a unique armour piece | Its defences (e.g. Evasion), requirements, and unique modifiers without tier badges |
+| I3 | Press Wiki, poe2db, and (English game, rare) Craft of Exile | Each opens the item's page in the browser |
+| I4 | Open the stash, item check an item, press "Find in stash"; then press the Find in stash hotkey on a few items in a row; then item check an item with a price note (set in a premium stash tab) and press "Same price note" | The panel closes, the game comes to the front, and the stash search box gets the item's name in quotes, never the whole item text. Right after a copy the name is typed (log: "typing the search"); with a layout that can't type it, it's pasted after ~2 s. "Same price note" appears only for items with a note and searches for the note |
+| I5 | Press "Price check" | The item check closes and the native price check opens for the same item |
+| I6 | Item check a waystone | Exiled Exchange 2's map check appears (not the native panel) |
+| I7 | Click in the game, press Esc, or ⌘-Tab away; drag the header | Each click, Esc, or tab-out closes it; dragging moves it and it grows downward from there |
+| I8 | Turn Settings ▸ Hotkeys ▸ Native item check off and item check an item | Exiled Exchange 2's item info appears |
+| I9 | With the item check open, press the price check key on another item | The price check opens and the item check closes |
+| I10 | Item check a quest item | A small panel with its name (green), Wiki, and Find in stash; no price check button |
+
+Without the game: `SwiftExile --debug-item-check=<item.txt>` shows a saved item (`--item-check-snapshot=<png>` renders it).
+
 ### Chat, stash search, stash scrolling
 
 Set these up in the overlay's settings (Exiled Exchange 2): chat commands under Chat, stash search
@@ -157,6 +176,7 @@ Settings ▸ Leveling ▸ "Allow reading of Client.txt file" (Exiled Exchange 2'
 | W1 | Menu bar ▸ Settings… | Window with a sidebar: Game, Hotkeys, Price Check, Chat Commands, Stash Search, Leveling, Permissions, About; your current overlay settings are shown |
 | W2 | Hotkeys ▸ "Open without auto-hide" (the price check that stays open and takes focus): click the field, press F6. In the game hover an item and press F6, then the old key | Field shows `F6`; F6 opens the price check right away (no restart); the old key does nothing. Set it back afterwards |
 | W3 | Press Backspace while recording a key; press Esc while recording | Backspace clears it; Esc keeps the old one |
+| W3b | Record a hotkey another action already uses (e.g. the overlay key, or a chat command's key) | Beep; the field keeps its old key and says what uses it ("Shift + Space is used by Overlay") |
 | W4 | Chat Commands: add `/played` with a hotkey, Send on | The hotkey types and sends it in the game |
 | W5 | Stash Search: open the stash in the game, press ▶ on an entry | The game comes to the front and the stash search box gets the text |
 | W6 | Change a setting in the overlay's own Settings and save; look at the window | The window shows the change |
@@ -175,11 +195,12 @@ Settings ▸ Leveling ▸ "Allow reading of Client.txt file" (Exiled Exchange 2'
 
 ## Deferred regression checks
 
-Not run yet because of the current game setup; run them before the first release that supports the
-native macOS client, and after any change to window tracking or overlay placement.
+Not run yet because of the current game setup, or kept as known issues to watch; run them before
+the first release that supports the native macOS client, and after any change to what they cover.
 
 | # | Check | Why deferred | Steps |
 |---|---|---|---|
+| I4b | Stash search right after a copy, under Wine | Wine hands a Mac clipboard change to the game only on its 2 s check (winemac.drv `CLIPBOARD_UPDATE_DELAY`), so within ~2 s of the game's copy a paste pastes the item. Typing works around it (2026-11-07); writing the clipboard while Wine still owned it didn't help | After any change to stash search, chat macros, or clipboard handling: run I4 with the hotkey (single and quick presses) and with the panel button, and with a non-Latin keyboard layout active (pasted after ~2 s). Never the whole item text, never a beep |
 | T8 | Second display | CrossOver needs a game restart to move the window between displays (2026-11-07) | Windowed: drag the game to the other display, press the overlay key and a price check key; overlay and price check must appear on that display, aligned. Then the same in windowed fullscreen on that display. Optional: window straddling both displays. Log lines `geometry changed … window (x, y, w×h) → overlay (…)` must show matching rects |
 
 ## Reading the log

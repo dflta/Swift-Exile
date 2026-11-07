@@ -87,6 +87,7 @@ private struct OverlaySettingsPage<Content: View>: View {
                                    description: Text("Exiled Exchange 2 creates its settings the first time the overlay runs. Start SwiftExile with the game once, then come back."))
         } else {
             content()
+                .environment(\.hotkeySettings, store)
         }
     }
 }

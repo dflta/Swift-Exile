@@ -152,6 +152,17 @@ final class KeySynthesizer {
         post(down.reversed().map { KeyStep($0, down: false) }, alsoHeld: alsoHeld)
     }
 
+    /// Types one character's key (from `KeyboardLayoutMap`), with Shift if it needs it and nothing
+    /// else held.
+    func type(_ key: KeyboardLayoutMap.Key) {
+        for down in [true, false] {
+            guard let event = CGEvent(keyboardEventSource: source, virtualKey: key.code, keyDown: down) else { continue }
+            event.flags = key.shift ? .maskShift : []
+            event.setIntegerValueField(.eventSourceUserData, value: InputTap.syntheticMarker)
+            event.post(tap: .cghidEventTap)
+        }
+    }
+
     private func post(_ step: KeyStep, alsoHeld: Set<String>) {
         guard let code = KeyNames.macKeyCode(for: step.key),
               let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: step.down)
