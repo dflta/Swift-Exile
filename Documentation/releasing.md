@@ -48,13 +48,16 @@ gh secret set SPARKLE_ED25519_PRIVATE --repo dflta/Swift-Exile < ~/.swiftexile-r
 
 1. Make sure `main` is green (the Test workflow) and the manual checklist in
    [testing.md](testing.md) passes for the changes in this release.
-2. Tag and push:
+2. In [CHANGELOG.md](../CHANGELOG.md), rename "Unreleased" to the version (`## 0.2.0`) and commit.
+   That section becomes the GitHub Release notes and the notes in the update dialog; the Release
+   workflow stops if it's missing (`Scripts/release-notes.sh 0.2.0` shows what it will use).
+3. Tag and push:
 
    ```bash
    git tag v0.2.0 && git push origin v0.2.0
    ```
 
-3. Watch the Release workflow. When it finishes, the release has `SwiftExile-0.2.0.dmg` and
+4. Watch the Release workflow. When it finishes, the release has `SwiftExile-0.2.0.dmg` and
    `appcast.xml`. Installed copies offer the update on their next check.
 
 The version comes from the tag; the build number (what Sparkle compares) is the number of commits
