@@ -160,6 +160,14 @@ private struct AboutTab: View {
                 LabeledContent("Version", value: AppInfo.version)
                 LabeledContent("Exiled Exchange 2", value: AppInfo.upstreamVersion)
             }
+            if actions.updates.canCheck {
+                Section("Updates") {
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { actions.updates.automaticallyChecks },
+                        set: { actions.updates.automaticallyChecks = $0 }))
+                    Button("Check for Updates…") { actions.updates.checkForUpdates() }
+                }
+            }
             Section("Credits") {
                 Text("SwiftExile is a native macOS host for Exiled Exchange 2 by Kvan7, itself a fork of Awakened PoE Trade by SnosMe. The price check, item parser, and widgets come from Exiled Exchange 2. Not affiliated with or endorsed by Grinding Gear Games.")
                     .fixedSize(horizontal: false, vertical: true)

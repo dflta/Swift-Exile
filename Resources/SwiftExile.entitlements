@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Hardened runtime, no App Sandbox (event taps and AX need it off, plan §3.4).
+	     A self-signed certificate has no Team ID, so library validation would refuse to load the
+	     bundled Sparkle.framework even though it is signed with the same certificate. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

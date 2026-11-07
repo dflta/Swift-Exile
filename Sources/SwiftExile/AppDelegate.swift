@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let status = HostStatus()
     /// Persistent log (`~/Library/Logs/SwiftExile/swiftexile.log`), also for Finder launches.
     let logFile = LogFile()
+    let updates = Updates()
     private let options = LaunchOptions.parse()
     private var hub: EventHub?
     private var webHost: WebViewHost?
@@ -35,6 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         installSignalHandlers()
         UserDefaults.standard.register(defaults: [ShortcutController.nativePriceCheckDefaultsKey: true])
+        // Not during scripted runs (snapshots, --quit-after): Sparkle may ask about automatic checks.
+        if options.quitAfter == nil && options.nativeSnapshotPath == nil { updates.start() }
         // Info.plist sets LSUIElement (menu bar app, no Dock icon). The debug browser window
         // behaves like a normal app instead.
         if options.browserMode { NSApp.setActivationPolicy(.regular) }

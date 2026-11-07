@@ -1,0 +1,56 @@
+name: Release
+
+# Push a tag like v0.2.0 to build, sign, and publish a release (Documentation/releasing.md).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0 # the build number is the commit count
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Version from tag
+        run: |
+          echo "SWIFTEXILE_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "SWIFTEXILE_BUILD=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+
+      - name: Tests
+        run: swift test
+
+      - name: Build and sign
+        env:
+          SWIFTEXILE_P12_BASE64: ${{ secrets.SWIFTEXILE_P12_BASE64 }}
+          SWIFTEXILE_P12_PASSWORD: ${{ secrets.SWIFTEXILE_P12_PASSWORD }}
+        run: Scripts/bundle-app.sh release
+
+      - name: DMG
+        run: Scripts/make-dmg.sh
+
+      - name: Appcast
+        env:
+          SPARKLE_ED25519_PRIVATE: ${{ secrets.SPARKLE_ED25519_PRIVATE }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Keep older entries: start from the latest release's appcast, if there is one.
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir build/previous || true
+          Scripts/make-appcast.sh "build/SwiftExile-$SWIFTEXILE_VERSION.dmg" "$GITHUB_REF_NAME" build/previous/appcast.xml
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "build/SwiftExile-$SWIFTEXILE_VERSION.dmg" build/appcast/appcast.xml \
+            --repo "$GITHUB_REPOSITORY" --title "SwiftExile $SWIFTEXILE_VERSION" --generate-notes

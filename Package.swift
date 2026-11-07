@@ -12,6 +12,8 @@ let package = Package(
         .package(url: "https://github.com/hummingbird-project/hummingbird-websocket.git", from: "2.2.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
         .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.0"),
+        // Auto-updates (plan §3.4): EdDSA-signed updates from the GitHub Releases appcast.
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", from: "2.10.0"),
     ],
     targets: [
         // All host logic lives here so it can be unit-tested headlessly.
@@ -28,7 +30,14 @@ let package = Package(
         // Thin AppKit shell: window, WKWebView, menus.
         .executableTarget(
             name: "SwiftExile",
-            dependencies: ["SwiftExileCore"]
+            dependencies: [
+                "SwiftExileCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
+            linkerSettings: [
+                // Sparkle.framework is copied to Contents/Frameworks by Scripts/bundle-app.sh.
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
+            ]
         ),
         .testTarget(
             name: "SwiftExileCoreTests",

@@ -35,5 +35,9 @@
 	<string>SwiftExile is built on Exiled Exchange 2 (Kvan7) and Awakened PoE Trade (SnosMe). MIT License.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/dflta/Swift-Exile/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>8LpFfQJccCae0Pmp6P47CFqDErJBoUMaBf85Df/235A=</string>
 </dict>
 </plist>

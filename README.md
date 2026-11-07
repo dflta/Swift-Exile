@@ -6,7 +6,11 @@ SwiftExile replaces the Electron shell with a native Swift app and is moving the
 
 Not affiliated with or endorsed by Grinding Gear Games.
 
-> **Status:** prototype. Native SwiftUI menu bar item, Settings window, and a **native SwiftUI price check (preview)**: item header, poe.ninja price, mod filters, trade listings and bulk exchange offers. Its data comes from Exiled Exchange 2's own parser and trade logic, run headless (`Engine/`). Other widgets still use Exiled Exchange 2's web UI in the overlay; menu bar ▸ "Native Price Check (Preview)" switches the price check back to it. Tested with the Windows client under NotProton/CrossOver.
+> **Status:** early beta. Native SwiftUI menu bar item, Settings window, and a **native SwiftUI price check (preview)**: roll sliders, tier badges, poe.ninja price and trend, item filters, a rune and catalyst editor, trade listings and bulk exchange offers. Its data comes from Exiled Exchange 2's own parser and trade logic, run headless (`Engine/`). Other widgets still use Exiled Exchange 2's web UI in the overlay; Settings ▸ Price Check switches the price check back to it. Hotkeys, chat commands, stash search, and stash tab scrolling work as in Exiled Exchange 2. Tested with the Windows client under NotProton/CrossOver.
+
+## Install
+
+Download the DMG from [Releases](https://github.com/dflta/Swift-Exile/releases/latest) and follow [Documentation/install.md](Documentation/install.md): SwiftExile isn't notarized, so the first launch needs one click in Privacy & Security. Updates install through the app (Sparkle).
 
 ## Build
 
@@ -42,6 +46,8 @@ it (for example Rabbit Idol's "Sceptres: 15% increased Spirit"), so socketed aug
 unknown. [`Engine/augment-supplement.json`](Engine/augment-supplement.json) adds them when the engine starts, and lists
 the gaps it can't fill yet. Entries were checked against poe2db.tw; remove them once upstream ships
 the data.
+
+Releases: [Documentation/releasing.md](Documentation/releasing.md).
 
 ## License
 

@@ -34,7 +34,8 @@ SOFTWARE.
 ## Renderer npm dependencies
 
 The renderer build bundles npm packages (Vue, vue-i18n, Tailwind, and others) under their own
-licenses. A generated list will be added to release builds (plan milestone M7).
+licenses. Every app bundle includes their license files in
+`Contents/Resources/Licenses/npm/` (collected at build time by `Scripts/bundle-app.sh`).
 
 ## Swift packages
 
@@ -42,3 +43,7 @@ licenses. A generated list will be added to release builds (plan milestone M7).
   [hummingbird-websocket](https://github.com/hummingbird-project/hummingbird-websocket): Apache License 2.0
 - [SwiftNIO](https://github.com/apple/swift-nio), [swift-http-types](https://github.com/apple/swift-http-types),
   and their Apple dependencies: Apache License 2.0
+- [Sparkle](https://github.com/sparkle-project/Sparkle) (auto-updates): MIT License
+
+Every app bundle includes their license and NOTICE files in
+`Contents/Resources/Licenses/swift-packages/`.

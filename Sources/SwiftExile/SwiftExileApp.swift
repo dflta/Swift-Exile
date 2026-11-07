@@ -48,6 +48,12 @@ struct MenuBarContent: View {
         Button("Open in Browser") { actions.openInBrowser() }
         Button("Open Settings Folder") { actions.openDataFolder() }
         Button("Show Log") { actions.openLogFile() }
+        if actions.updates.canCheck {
+            Button("Check for Updates…") {
+                NSApp.activate()
+                actions.updates.checkForUpdates()
+            }
+        }
 
         Divider()
 
