@@ -53,7 +53,7 @@ skipped.
 | T5 | While playing fullscreen, switch to another Space (Ctrl+→) and back | Overlay hidden on the other Space, correct on return |
 | T6 | ⌘-Tab to another app and back, in windowed and fullscreen | Hidden while away, shown and click-through on return |
 | T7 | Open Mission Control during play, then close it | Overlay not stuck on top of Mission Control; correct afterwards |
-| T8 | Move the game to the second display, windowed and fullscreen | Overlay follows to the second display with correct size |
+| T8 | Move the game to the second display, windowed and fullscreen | Overlay follows to the second display with correct size. **Deferred:** under CrossOver, moving the game to another display needs a game restart, so this is run as a regression check once the native client ships (see "Deferred regression checks") |
 | T9 | Change the game resolution, or plug/unplug a display | Overlay re-snaps |
 | T10 | Minimize or hide (⌘H) the game | Overlay hidden |
 | T11 | Quit the game and start it again | Detaches, then attaches again |
@@ -94,6 +94,15 @@ Global hotkeys work only while the game window is in front, like upstream.
 
 Stash search, chat macros, Ctrl+wheel stash scrolling, and the heist OCR key are not implemented
 on macOS yet; their hotkeys log `this action is not implemented on macOS yet`.
+
+## Deferred regression checks
+
+Not run yet because of the current game setup; run them before the first release that supports the
+native macOS client, and after any change to window tracking or overlay placement.
+
+| # | Check | Why deferred | Steps |
+|---|---|---|---|
+| T8 | Second display | CrossOver needs a game restart to move the window between displays (2026-11-07) | Windowed: drag the game to the other display, press the overlay key and a price check key; overlay and price check must appear on that display, aligned. Then the same in windowed fullscreen on that display. Optional: window straddling both displays. Log lines `geometry changed … window (x, y, w×h) → overlay (…)` must show matching rects |
 
 ## Reading the log
 
