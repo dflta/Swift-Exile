@@ -1,13 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.3
 
 - **Native item check.** Set its hotkey in Settings ▸ Hotkeys. It shows the item's modifiers with
-  their tiers and roll ranges, weapon DPS, defences, and requirements, with buttons for the wiki,
-  poe2db, Craft of Exile, finding the item in your stash, and a price check. Quest items get a
-  wiki link. Maps still open Exiled Exchange 2's map check.
+  their tiers and roll ranges, weapon DPS, defences, the skill an item grants, and requirements,
+  with buttons for the wiki, poe2db, Craft of Exile, finding the item in your stash, and a price
+  check. Quest items get a wiki link. Maps still open Exiled Exchange 2's map check.
 - Settings no longer let you give two actions the same hotkey; they tell you what already uses it.
-- Fixed: the Find in stash hotkey sometimes typed the whole item text into the stash search.
+- Fixed: Find in stash sometimes put the whole item text into the stash search, or did nothing
+  after the item check closed.
 
 ## 0.1.2
 
