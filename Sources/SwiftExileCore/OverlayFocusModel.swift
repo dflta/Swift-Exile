@@ -11,6 +11,8 @@ public struct OverlayFocusModel: Equatable, Sendable {
         case setInteractable(Bool)
         /// Give keyboard focus back to the game.
         case focusGame
+        /// The game grabbed keyboard focus while the overlay is interactable: take it back.
+        case retakeFocus
         case show
         case hide
     }
@@ -41,8 +43,17 @@ public struct OverlayFocusModel: Equatable, Sendable {
 
     /// From the tracker: is the game the frontmost app, and does our panel hold keyboard focus?
     public mutating func focusChanged(gameFrontmost: Bool, overlayIsKey: Bool) -> [Effect] {
+        let gameWasFrontmost = self.gameFrontmost
         self.gameFrontmost = gameFrontmost
         self.overlayIsKey = overlayIsKey
+        // While interactable, the overlay covers the whole game window, so the game can't have been
+        // clicked. If the game was already frontmost and now holds keyboard focus, it grabbed it by
+        // itself (risk R6: under Wine in windowed fullscreen, about once a second). Stay
+        // interactable and take focus back. Returning from another app is different: that follows
+        // upstream and drops interactable (OverlayWindow.ts:193-195).
+        if isInteractable && gameFrontmost && gameWasFrontmost && !overlayIsKey {
+            return [.retakeFocus] + syncVisibility()
+        }
         return setGameActive(gameFrontmost && !overlayIsKey) + syncVisibility()
     }
 

@@ -47,9 +47,11 @@ Use the menu bar item's **Show Overlay** (or the overlay key once hotkeys exist)
 | F3 | Repeat F1 in different game states: in town, in a map, in a menu, on the loading screen | Note any state where the overlay drops back to click-through by itself |
 | F4 | Show Overlay, then ⌘-Tab to another app | Overlay hides; it does not fight to stay in front |
 
-If F1 or F3 fails, the log shows `reclaiming key focus` lines and possibly
-`the game kept taking keyboard focus back`. Note which game state it was; that is the data needed
-to fix risk R6.
+Test F1–F3 in **both windowed and windowed fullscreen**. Under Wine, windowed fullscreen makes the
+game grab keyboard focus about once a second; SwiftExile takes it back each time, so the overlay
+should stay interactive. The log shows `game took keyboard focus; retaking (N this session)` and,
+when the overlay closes, `the game grabbed keyboard focus N time(s)`. If the overlay still drops to
+click-through by itself, note the mode and game state.
 
 ## Hotkeys and price check
 
@@ -74,6 +76,6 @@ on macOS yet; their hotkeys log `this action is not implemented on macOS yet`.
 
 - `[GameWindow] geometry changed 412 ms after Space change` — time from a transition to the
   overlay's new position. The prototype target is ≤ 500 ms (95th percentile).
-- `[Focus] reclaiming key focus (attempt N)` — the game took keyboard focus back and SwiftExile
-  retook it. Attempt 3 also activates SwiftExile.
+- `[Focus] game took keyboard focus; retaking (N this session)` — the game grabbed keyboard focus
+  while the overlay was interactive, and SwiftExile took it back (at most once per 150 ms).
 - `[Focus] focus update gameFrontmost=… panelKey=… → [...]` — every overlay state change.

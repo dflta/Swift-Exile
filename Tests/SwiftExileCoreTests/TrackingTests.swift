@@ -135,6 +135,26 @@ import Testing
         #expect(model.gameActive)
     }
 
+    @Test func gameGrabbingFocusWhileInteractableIsRetaken() {
+        // Windowed fullscreen under Wine: the game takes key focus about once a second.
+        var model = attachedAndFocused()
+        _ = model.toggle()
+        _ = model.focusChanged(gameFrontmost: true, overlayIsKey: true)
+        for _ in 0..<5 {
+            #expect(model.focusChanged(gameFrontmost: true, overlayIsKey: false) == [.retakeFocus])
+            #expect(model.isInteractable)
+            #expect(!model.gameActive)
+            #expect(model.focusChanged(gameFrontmost: true, overlayIsKey: true) == [])
+        }
+    }
+
+    @Test func retakeEvenIfPanelNeverBecameKey() {
+        var model = attachedAndFocused()
+        _ = model.toggle()
+        #expect(model.focusChanged(gameFrontmost: true, overlayIsKey: false) == [.retakeFocus])
+        #expect(model.isInteractable)
+    }
+
     @Test func switchingToAnotherAppHidesOverlay() {
         var model = attachedAndFocused()
         let effects = model.focusChanged(gameFrontmost: false, overlayIsKey: false)

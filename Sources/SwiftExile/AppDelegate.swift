@@ -40,7 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let port: Int
         do {
-            port = try await HostServer.start(configuration: configuration, hub: hub, configStore: configStore)
+            port = try await HostServer.start(configuration: configuration, hub: hub, configStore: configStore) {
+                // SIGTERM / Ctrl+C stop the server; quit the whole app instead of leaving it running.
+                DispatchQueue.main.async { NSApp.terminate(nil) }
+            }
         } catch {
             FileHandle.standardError.write(Data("Failed to start server: \(error)\n".utf8))
             NSApp.terminate(nil)
@@ -175,6 +178,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + toggleAt) { [weak self] in
                 self?.debugToggle(label: "toggle 1 (expect interactive)")
             }
+            DispatchQueue.main.asyncAfter(deadline: .now() + toggleAt + 2.5) { [weak self] in
+                self?.debugState(label: "hold check 2.5 s after toggle 1 (expect still interactive)")
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + toggleAt + 3) { [weak self] in
                 self?.debugToggle(label: "toggle 2 (expect back to game)")
             }
@@ -199,11 +205,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func debugToggle(label: String) {
         overlay?.toggle(source: "debug")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self, let overlay = self.overlay else { return }
-            let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
-            let line = "debug [Overlay] \(label): interactable=\(self.status.overlayInteractable) visible=\(self.status.overlayVisible) panelKey=\(overlay.panel.isKeyWindow) ignoresMouse=\(overlay.panel.ignoresMouseEvents) frontmost=\(front) appActive=\(NSApp.isActive) gameActive=\(self.status.gameFocused)"
-            if let hub = self.hub { Task { await hub.log(line) } }
+            self?.debugState(label: label)
         }
+    }
+
+    private func debugState(label: String) {
+        guard let overlay, let hub else { return }
+        let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
+        let line = "debug [Overlay] \(label): interactable=\(status.overlayInteractable) visible=\(status.overlayVisible) panelKey=\(overlay.panel.isKeyWindow) ignoresMouse=\(overlay.panel.ignoresMouseEvents) frontmost=\(front) appActive=\(NSApp.isActive) gameActive=\(status.gameFocused)"
+        Task { await hub.log(line) }
     }
 
     // MARK: Actions (menu bar)

@@ -141,22 +141,6 @@ final class OverlayController {
     private func scheduleFocusUpdate() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            switch self.reclaim.decide(
-                now: Date(), isInteractable: self.model.isInteractable,
-                panelIsKey: self.panel.isKeyWindow, gameFrontmost: self.tracker.gameFrontmost
-            ) {
-            case .retake(let activateApp):
-                self.trace("reclaiming key focus (attempt \(self.reclaim.attempts)\(activateApp ? ", activating app" : ""))")
-                if activateApp { NSApp.activate() }
-                self.panel.makeKeyAndOrderFront(nil)
-                self.panel.makeFirstResponder(self.webHost.webView)
-                return
-            case .giveUp:
-                let hub = self.hub
-                Task { await hub.log("warn [Overlay] the game kept taking keyboard focus back; overlay returned to click-through") }
-            case .none:
-                break
-            }
             let effects = self.model.focusChanged(gameFrontmost: self.tracker.gameFrontmost, overlayIsKey: self.panel.isKeyWindow)
             if !effects.isEmpty {
                 self.trace("focus update gameFrontmost=\(self.tracker.gameFrontmost) panelKey=\(self.panel.isKeyWindow) → \(effects)")
@@ -165,8 +149,40 @@ final class OverlayController {
         }
     }
 
-    /// Retakes keyboard focus when the game grabs it back (risk R6); see `FocusReclaimPolicy`.
-    private var reclaim = FocusReclaimPolicy()
+    // MARK: Retaking focus (risk R6)
+
+    /// Under Wine in windowed fullscreen the game grabs keyboard focus about once a second while the
+    /// overlay is interactable. Take it back each time, at most once per `retakeInterval`; a grab
+    /// inside the interval is retried when it ends, so none is missed.
+    private static let retakeInterval: TimeInterval = 0.15
+    private var lastRetake = Date.distantPast
+    private var pendingRetake: DispatchWorkItem?
+    private var retakesThisSession = 0
+
+    private func retakeFocus() {
+        let wait = Self.retakeInterval - Date().timeIntervalSince(lastRetake)
+        guard wait <= 0 else {
+            guard pendingRetake == nil else { return }
+            let work = DispatchWorkItem { [weak self] in
+                self?.pendingRetake = nil
+                self?.retakeFocusIfStillNeeded()
+            }
+            pendingRetake = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: work)
+            return
+        }
+        lastRetake = Date()
+        retakesThisSession += 1
+        trace("game took keyboard focus; retaking (\(retakesThisSession) this session)")
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(webHost.webView)
+    }
+
+    private func retakeFocusIfStillNeeded() {
+        guard model.isInteractable, !panel.isKeyWindow, tracker.gameFrontmost else { return }
+        retakeFocus()
+    }
+
     /// `SWIFTEXILE_ACTIVATION=app` activates SwiftExile on every interactable switch (diagnostics).
     private let alwaysActivate = ProcessInfo.processInfo.environment["SWIFTEXILE_ACTIVATION"] == "app"
 
@@ -209,13 +225,19 @@ final class OverlayController {
             case .broadcastFocusChange(let game, let overlay, let usingHotkey):
                 sendFocusChange(game: game, overlay: overlay, usingHotkey: usingHotkey)
             case .setInteractable(true):
-                reclaim.began(at: Date())
+                retakesThisSession = 0
                 panel.ignoresMouseEvents = false
                 if alwaysActivate { NSApp.activate() }
                 panel.makeKeyAndOrderFront(nil)
                 panel.makeFirstResponder(webHost.webView)
             case .setInteractable(false):
-                reclaim.ended()
+                pendingRetake?.cancel()
+                pendingRetake = nil
+                if retakesThisSession > 0 {
+                    let count = retakesThisSession
+                    let hub = hub
+                    Task { await hub.log("debug [Overlay] the game grabbed keyboard focus \(count) time(s) while the overlay was interactive") }
+                }
                 panel.ignoresMouseEvents = true
                 if panel.isKeyWindow {
                     // Ordering out the key panel hands keyboard focus back to the frontmost app.
@@ -228,6 +250,8 @@ final class OverlayController {
                     NSApp.yieldActivation(to: game)
                     game.activate(from: .current, options: [])
                 }
+            case .retakeFocus:
+                retakeFocus()
             case .show:
                 panel.orderFrontRegardless()
             case .hide:

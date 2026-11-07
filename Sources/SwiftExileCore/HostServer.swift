@@ -130,10 +130,13 @@ public enum HostServer {
     }
 
     /// Starts the server in the background and returns the port it bound to.
+    /// - Parameter onStopped: called when the server stops after running. The server library
+    ///   handles SIGTERM/SIGINT by shutting itself down; the app should then quit as well.
     public static func start(
         configuration: HostServerConfiguration,
         hub: EventHub,
-        configStore: ConfigStore
+        configStore: ConfigStore,
+        onStopped: @escaping @Sendable () -> Void = {}
     ) async throws -> Int {
         let once = ResumeOnce()
         return try await withCheckedThrowingContinuation { continuation in
@@ -144,6 +147,7 @@ public enum HostServer {
             Task.detached {
                 do {
                     try await app.runService()
+                    onStopped()
                 } catch {
                     once.resume(with: .failure(error))
                 }
