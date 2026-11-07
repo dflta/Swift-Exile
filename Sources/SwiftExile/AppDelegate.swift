@@ -103,10 +103,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await hub.send(.broadcast, changed)
             }
         }
-        await hub.on(.userAction) { payload in
+        await hub.on(.userAction) { [weak self] payload in
             guard let action = try? payload?.decode(UserActionPayload.self) else { return }
             if action.action == "quit" {
                 await MainActor.run { NSApp.terminate(nil) }
+            } else if action.action == "stash-search", let text = action.text {
+                await MainActor.run { self?.shortcuts?.stashSearchFromOverlay(text) }
             }
         }
         await hub.on(.updateHostConfig) { [weak self] payload in
@@ -145,6 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Native SwiftUI price check (preview), driven by upstream's logic in a hidden web view.
         let engine = PriceCheckEngine(serverPort: status.serverPort, log: { line in Task { await hub.log(line) } })
         let native = NativePriceCheckController(model: PriceCheckModel(engine: engine, log: { line in Task { await hub.log(line) } }))
+        native.isGame = { [weak self] pid in self?.status.gamePid == pid }
+        native.overlayWindowNumber = { [weak overlay] in overlay?.panel.windowNumber ?? 0 }
         shortcuts.nativePriceCheck = native
         nativePriceCheck = native
         Task { _ = try? await engine.start() } // warm up: item data and prices load before the first check
@@ -275,6 +279,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let seconds = options.quitAfter {
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { NSApp.terminate(nil) }
         }
+    }
+
+    /// Settings ▸ Price Check ▸ Show prices in.
+    func priceCurrencyChanged(_ currency: PriceCurrency) {
+        guard let model = nativePriceCheck?.model else { return }
+        Task { await model.setPriceCurrency(currency) }
     }
 
     private func debugToggle(label: String) {

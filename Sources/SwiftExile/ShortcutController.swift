@@ -18,6 +18,11 @@ final class ShortcutController {
     private var showModsKey = "Alt"
     private var gameConfigOverride: String?
     private var logKeys = false
+    private var stashScroll = false
+    private var restoreClipboard = false
+    /// A chat or stash-search macro is running (upstream's `restoreShortly` throttle).
+    private var textBoxBusy = false
+    private var lastStashScroll = Date.distantPast
     private var areaModel = WidgetAreaModel()
     private var altModel = AltVisibilityModel()
     private var altHideWork: DispatchWorkItem?
@@ -63,6 +68,8 @@ final class ShortcutController {
     func hostConfigChanged(_ config: HostConfig) {
         rawActions = config.shortcuts.compactMap(ShortcutAction.init(json:))
         logKeys = config.logKeys
+        stashScroll = config.stashScroll
+        restoreClipboard = config.restoreClipboard
         gameConfigOverride = config.gameConfig
         let poller = poller
         Task { await poller.configure(restoreClipboard: config.restoreClipboard, initialDelayMs: config.initialDelay) }
@@ -167,10 +174,59 @@ final class ShortcutController {
             copyItem(target: target, focusOverlay: focusOverlay, held: held)
         case .triggerEvent(let target):
             send(.broadcast, try? IpcMessage(.widgetAction, WidgetActionPayload(target: target)))
-        case .stashSearch, .pasteInChat, .ocrText:
-            log("warn [Shortcuts] \"\(entry.shortcut)\": this action is not implemented on macOS yet")
+        case .pasteInChat(let text, let send):
+            runTextBox(TextBox.typeInChat(text, send: send, command: status.gameFlavor.commandModifier), held: held)
+        case .stashSearch(let text):
+            runTextBox(TextBox.stashSearch(text, command: status.gameFlavor.commandModifier), held: held)
+        case .ocrText:
+            // Upstream only runs heist-gem OCR on Windows (Shortcuts.ts:249).
+            log("warn [Shortcuts] \"\(entry.shortcut)\": OCR is not implemented on macOS yet")
         case .testOnly, .unknown:
             break
+        }
+    }
+
+    // MARK: Chat and stash search
+
+    /// Stash search requested from the overlay (`CLIENT->MAIN::user-action`, Shortcuts.ts:73-77):
+    /// the game gets focus back first (`overlay.assertGameActive()`).
+    func stashSearchFromOverlay(_ text: String) {
+        overlay.focusGame(source: "stash-search")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            self.runTextBox(TextBox.stashSearch(text, command: self.status.gameFlavor.commandModifier), held: [])
+        }
+    }
+
+    /// `restoreShortly` (HostClipboard.ts:87-103) around a chat or stash-search macro: ignored while
+    /// one is running (protects against "Too many actions"); the clipboard is restored afterwards
+    /// when the "restore clipboard" setting is on.
+    private func runTextBox(_ steps: [TextBoxStep], held: Set<String>) {
+        guard !textBoxBusy else {
+            log("debug [Shortcuts] chat/stash macro ignored: the previous one is still running")
+            return
+        }
+        textBoxBusy = true
+        let pasteboard = NSPasteboard.general
+        let saved = pasteboard.string(forType: .string)
+        for step in steps {
+            switch step {
+            case .setClipboard(let text):
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+            case .tap(let key, let modifiers):
+                synthesizer.tap(key, modifiers: modifiers, alsoHeld: held)
+            }
+        }
+        let delay = TextBox.restoreDelay(isWine: status.gameFlavor.isWine)
+        let restore = restoreClipboard
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            if restore, let saved {
+                pasteboard.clearContents()
+                pasteboard.setString(saved, forType: .string)
+            }
+            self?.textBoxBusy = false
         }
     }
 
@@ -240,9 +296,14 @@ final class ShortcutController {
     // MARK: Pointer
 
     private func handlePointer(_ event: InputTap.PointerEvent) {
+        if event.kind == .wheel {
+            handleStashScroll(event)
+            return
+        }
         if event.kind == .moved && !event.alt {
             applyAlt(altModel.otherInput())
         }
+        if event.kind == .down { nativePriceCheck?.mouseDown(atQuartz: event.location) }
         guard areaModel.isTracking else { return }
         let effects: [WidgetAreaModel.Effect]
         let interactable = areaTarget == .native ? (nativePriceCheck?.isKey ?? false) : overlay.isInteractable
@@ -251,11 +312,13 @@ final class ShortcutController {
             effects = areaModel.mouseMoved(to: event.location, ctrl: event.ctrl, alt: event.alt, overlayInteractable: interactable)
         case .down:
             effects = areaModel.mouseDown(at: event.location)
+        case .wheel:
+            return // handled above
         }
         if areaTarget == .native, let native = nativePriceCheck {
             for effect in effects {
                 switch effect {
-                case .hideExclusiveWidget, .focusGame: native.hide()
+                case .hideExclusiveWidget, .focusGame: if !native.isPinned { native.hide() }
                 case .activateOverlay: native.activate()
                 }
             }
@@ -271,6 +334,20 @@ final class ShortcutController {
                 overlay.focusGame(source: "area tracker")
             }
         }
+    }
+
+    /// Ctrl + wheel outside the stash switches stash tabs with the arrow keys (Shortcuts.ts:96-106).
+    private func handleStashScroll(_ event: InputTap.PointerEvent) {
+        guard stashScroll, event.ctrl, overlay.isGameActive, let gameCocoa = status.gameRect,
+              let key = StashScroll.arrowKey(physicalDelta: event.wheelDelta) else { return }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let game = ScreenCoordinates.cocoaRect(fromQuartz: gameCocoa, primaryHeight: primaryHeight) // Cocoa → Quartz
+        guard !StashScroll.isStashArea(event.location, game: game) else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastStashScroll) >= StashScroll.minimumInterval else { return }
+        lastStashScroll = now
+        // Ctrl is physically held; keep it in the flags so Wine doesn't see it released.
+        synthesizer.tap(key, alsoHeld: ["Ctrl"])
     }
 
     // MARK: Alt-hold visibility

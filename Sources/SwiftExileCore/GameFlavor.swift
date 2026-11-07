@@ -105,6 +105,18 @@ public enum GameFlavor: Equatable, Sendable {
         return false
     }
 
+    /// The game's command modifier for paste, select-all, and reply: Ctrl on the Windows client,
+    /// ⌘ ("Meta") on the native macOS client (upstream uses Meta on darwin, text-box.ts:21).
+    public var commandModifier: String {
+        if case .native = self { return "Meta" }
+        return "Ctrl"
+    }
+
+    public var isWine: Bool {
+        if case .wine = self { return true }
+        return false
+    }
+
     public var displayName: String {
         switch self {
         case .wine: return "Windows client (Wine)"

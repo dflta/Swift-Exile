@@ -35,6 +35,14 @@ open build/SwiftExile.app
 
 Do not run SwiftExile and the Electron app at the same time: they share the settings file.
 
+### Item data supplement
+
+The native price check uses Exiled Exchange 2's item data. A few augment effects are missing from
+it (for example Rabbit Idol's "Sceptres: 15% increased Spirit"), so socketed augments would show as
+unknown. [`Engine/augment-supplement.json`](Engine/augment-supplement.json) adds them when the engine starts, and lists
+the gaps it can't fill yet. Entries were checked against poe2db.tw; remove them once upstream ships
+the data.
+
 ## License
 
 SwiftExile is MIT-licensed. It bundles Exiled Exchange 2, which is MIT-licensed by its authors; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

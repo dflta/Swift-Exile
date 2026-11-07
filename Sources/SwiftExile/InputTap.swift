@@ -21,8 +21,10 @@ final class InputTap {
     }
 
     struct PointerEvent: Sendable {
-        enum Kind: Sendable { case moved, down }
+        enum Kind: Sendable { case moved, down, wheel }
         var kind: Kind
+        /// For `.wheel`: vertical wheel movement with natural scrolling undone; negative = toward you.
+        var wheelDelta: Double = 0
         /// Global coordinates, origin at the top-left of the main display (same as AX frames).
         var location: CGPoint
         var ctrl: Bool
@@ -48,7 +50,7 @@ final class InputTap {
     func start() -> Bool {
         guard tap == nil else { return true }
         let types: [CGEventType] = [.keyDown, .keyUp, .flagsChanged, .mouseMoved, .leftMouseDragged,
-                                    .rightMouseDragged, .leftMouseDown, .rightMouseDown]
+                                    .rightMouseDragged, .leftMouseDown, .rightMouseDown, .scrollWheel]
         let mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -113,6 +115,13 @@ private func inputTapCallback(_ proxy: CGEventTapProxy, _ type: CGEventType, _ e
         let pointer = InputTap.PointerEvent(kind: isDown ? .down : .moved, location: event.location, ctrl: ctrl, alt: alt)
         MainActor.assumeIsolated { tap.handlePointer(pointer) }
         return Unmanaged.passUnretained(event)
+    case .scrollWheel:
+        // Only Ctrl + wheel matters (stash tab scrolling); skip the NSEvent work otherwise.
+        guard ctrl, let nsEvent = NSEvent(cgEvent: event) else { return Unmanaged.passUnretained(event) }
+        let delta = Double(nsEvent.scrollingDeltaY) * (nsEvent.isDirectionInvertedFromDevice ? -1 : 1)
+        let pointer = InputTap.PointerEvent(kind: .wheel, wheelDelta: delta, location: event.location, ctrl: ctrl, alt: alt)
+        MainActor.assumeIsolated { tap.handlePointer(pointer) }
+        return Unmanaged.passUnretained(event)
     default:
         return Unmanaged.passUnretained(event)
     }
@@ -135,11 +144,19 @@ final class KeySynthesizer {
         post([KeyStep(key, down: true), KeyStep(key, down: false)], alsoHeld: alsoHeld)
     }
 
+    /// Presses `modifiers`, taps `key`, releases the modifiers (uiohook's `keyTap(key, modifiers)`).
+    func tap(_ key: String, modifiers: [String], alsoHeld: Set<String> = []) {
+        let down = modifiers.filter { !alsoHeld.contains($0) }
+        post(down.map { KeyStep($0, down: true) }, alsoHeld: alsoHeld)
+        tap(key, alsoHeld: alsoHeld)
+        post(down.reversed().map { KeyStep($0, down: false) }, alsoHeld: alsoHeld)
+    }
+
     private func post(_ step: KeyStep, alsoHeld: Set<String>) {
         guard let code = KeyNames.macKeyCode(for: step.key),
               let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: step.down)
         else { return }
-        let isModifier = KeyNames.isModifier(step.key)
+        let isModifier = KeyNames.isModifier(step.key) || step.key == "Meta"
         if isModifier {
             if step.down { heldModifiers.insert(step.key) } else { heldModifiers.remove(step.key) }
             event.type = .flagsChanged
@@ -150,6 +167,7 @@ final class KeySynthesizer {
         if modifiers.contains("Ctrl") { flags.insert(.maskControl) }
         if modifiers.contains("Alt") { flags.insert(.maskAlternate) }
         if modifiers.contains("Shift") { flags.insert(.maskShift) }
+        if modifiers.contains("Meta") { flags.insert(.maskCommand) }
         event.flags = flags
         event.setIntegerValueField(.eventSourceUserData, value: InputTap.syntheticMarker)
         event.post(tap: .cghidEventTap)

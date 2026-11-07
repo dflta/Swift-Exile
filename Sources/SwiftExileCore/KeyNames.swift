@@ -28,6 +28,7 @@ public enum KeyNames {
         case "Ctrl": return 59   // kVK_Control
         case "Shift": return 56  // kVK_Shift
         case "Alt": return 58    // kVK_Option
+        case "Meta": return 55   // kVK_Command (used by synthesized chords on the native client)
         default: return byName[name]
         }
     }

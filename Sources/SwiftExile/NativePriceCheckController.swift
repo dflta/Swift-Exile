@@ -33,6 +33,13 @@ final class NativePriceCheckController {
     private var hosting: NSHostingController<PriceCheckView>!
     private var keyMonitor: Any?
     private var resizeObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
+    /// Pinned panel hidden because another app came to the front; shown again with the game.
+    private var suspended = false
+    /// Whether a process is the game (set by the app delegate).
+    var isGame: (pid_t) -> Bool = { _ in false }
+    /// SwiftExile's own overlay window, which covers the game and must not count as "inside".
+    var overlayWindowNumber: () -> Int = { 0 }
     /// Top-left corner (Cocoa) to keep while SwiftUI resizes the panel.
     private var anchorTop: CGPoint?
     /// Where the panel can be at most (Quartz), for the mouse-away tracker.
@@ -49,6 +56,13 @@ final class NativePriceCheckController {
         resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.keepAnchored() }
         }
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            let pid = app.processIdentifier
+            MainActor.assumeIsolated { self?.applicationActivated(pid) }
+        }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let isEscape = event.keyCode == 53 || (event.keyCode == 13 && event.modifierFlags.contains(.control))
             let isOurs = MainActor.assumeIsolated { event.window === self?.panel }
@@ -59,6 +73,7 @@ final class NativePriceCheckController {
     }
 
     var isVisible: Bool { panel.isVisible }
+    var isPinned: Bool { model.isPinned }
     var isKey: Bool { panel.isKeyWindow }
 
     /// Renders the panel's content to a PNG (development checks; no screen recording needed).
@@ -80,6 +95,7 @@ final class NativePriceCheckController {
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         let cocoa = ScreenCoordinates.cocoaRect(fromQuartz: frame, primaryHeight: primaryHeight)
         anchorTop = CGPoint(x: cocoa.minX, y: cocoa.maxY)
+        suspended = false
         panel.setFrameTopLeftPoint(anchorTop!)
         panel.orderFrontRegardless()
         if focus { panel.makeKey() }
@@ -106,6 +122,47 @@ final class NativePriceCheckController {
 
     func hide() {
         panel.orderOut(nil)
+        suspended = false
+        model.isPinned = false
+    }
+
+    /// A mouse click anywhere (from the event tap, Quartz coordinates). Clicking outside the panel
+    /// closes it unless it's pinned, like upstream's price check when the overlay loses focus.
+    func mouseDown(atQuartz point: CGPoint) {
+        guard panel.isVisible, !model.isPinned else { return }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cocoa = CGPoint(x: point.x, y: primaryHeight - point.y)
+        if panel.frame.contains(cocoa) || isOwnPopup(at: cocoa) { return }
+        hide()
+    }
+
+    /// Menus and popovers opened from the panel are separate windows of this process.
+    private func isOwnPopup(at cocoa: CGPoint) -> Bool {
+        let number = NSWindow.windowNumber(at: cocoa, belowWindowWithWindowNumber: 0)
+        guard number > 0, number != overlayWindowNumber(),
+              let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(number)) as? [[String: Any]],
+              let owner = info.first?[kCGWindowOwnerPID as String] as? pid_t
+        else { return false }
+        return owner == getpid()
+    }
+
+    /// Another app in front: close (or, when pinned, hide until the game is back).
+    private func applicationActivated(_ pid: pid_t) {
+        guard pid != getpid() else { return }
+        if isGame(pid) {
+            if suspended {
+                suspended = false
+                panel.orderFrontRegardless()
+            }
+            return
+        }
+        guard panel.isVisible else { return }
+        if model.isPinned {
+            suspended = true
+            panel.orderOut(nil)
+        } else {
+            hide()
+        }
     }
 
     private func keepAnchored() {

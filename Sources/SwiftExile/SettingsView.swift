@@ -12,6 +12,8 @@ struct SettingsView: View {
         TabView {
             GameTab(status: status)
                 .tabItem { Label("Game", systemImage: "gamecontroller") }
+            PriceCheckTab(actions: actions)
+                .tabItem { Label("Price Check", systemImage: "tag") }
             PermissionsTab(status: status)
                 .tabItem { Label("Permissions", systemImage: "lock.shield") }
             AboutTab(actions: actions)
@@ -53,6 +55,31 @@ private struct GameTab: View {
             Section("SwiftExile") {
                 PathRow(title: "Settings folder", path: status.dataDir)
                 LabeledContent("Local server", value: status.serverPort > 0 ? "127.0.0.1:\(status.serverPort)" : "Starting…")
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct PriceCheckTab: View {
+    let actions: AppDelegate
+    @AppStorage(ShortcutController.nativePriceCheckDefaultsKey) private var nativePriceCheck = true
+    @AppStorage(PriceCurrency.defaultsKey) private var priceCurrency = PriceCurrency.auto.rawValue
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Native price check (preview)", isOn: $nativePriceCheck)
+                Picker("Show prices in", selection: $priceCurrency) {
+                    ForEach(PriceCurrency.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
+                }
+                .onChange(of: priceCurrency) { _, newValue in
+                    actions.priceCurrencyChanged(PriceCurrency(rawValue: newValue) ?? .auto)
+                }
+            } footer: {
+                Text("Automatic shows divines from about 1 divine up and your core currency below, like Exiled Exchange 2. Applies to poe.ninja prices in the native price check.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

@@ -1,0 +1,32 @@
+{
+  "about": "Augment effects missing from Exiled Exchange 2's item data (upstream/renderer/public/data/en/items.ndjson at the pinned commit). Merged into the price-check engine's augment tables at startup (Engine/engine.ts, applyAugmentSupplement). Each entry adds effects to an item that upstream already knows; tradeId is the stat's first 'rune' id in upstream's stats.ndjson. Checked against poe2db.tw on 2026-11-07. Remove entries once upstream ships them; the engine skips effects upstream already has.",
+  "augments": [
+    {
+      "refName": "Rabbit Idol",
+      "source": "https://poe2db.tw/us/Rabbit_Idol",
+      "add": [
+        { "categories": ["Sceptre"], "string": "#% increased Spirit", "values": [15], "tradeId": ["rune.stat_1416406066"] }
+      ]
+    },
+    {
+      "refName": "Idol of Sirrius",
+      "source": "https://poe2db.tw/us/Idol",
+      "add": [
+        { "categories": ["Gloves"], "string": "#% increased Attack Speed", "values": [8], "tradeId": ["rune.stat_210067635"] }
+      ]
+    },
+    {
+      "refName": "Legacy of Greymake",
+      "source": "https://poe2db.tw/us/Runes",
+      "add": [
+        { "categories": ["Helmet"], "string": "# to all Attributes", "values": [50], "tradeId": ["rune.stat_1379411836"] }
+      ]
+    }
+  ],
+  "knownGaps": [
+    "Lesser Tempered Rune, Tempered Rune, Greater Tempered Rune: not in upstream's item data at all (no item record or icon), and Physical Thorns has no rune stat id.",
+    "Lesser Charging Rune: not in upstream's item data (higher grades are).",
+    "Idol of Silk, Bucklers: 'Companions gain Onslaught when you Parry' has no matching stat in upstream's stats.ndjson.",
+    "Soul Cores: not compared yet (poe2db page not fetched)."
+  ]
+}

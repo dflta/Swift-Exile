@@ -102,11 +102,36 @@ With menu bar ▸ "Native Price Check (Preview)" on (default):
 | N2 | Price check a rare with the locked key | Panel takes focus; tick filters, change a minimum (Enter), press "Search trade"; listings update. Esc closes it |
 | N3 | Price check currency (e.g. Divine Orb) | "Search bulk exchange"; offers grouped by the currency you pay with |
 | N4 | Turn the preview off and repeat N1 | Exiled Exchange 2's web price check appears instead |
+| N5 | Price check a unique and a rare with the locked key | Stats with a roll range show a slider: track = possible rolls (unique) or tier range (rare), yellow tick = this item's roll, highlighted part = what's searched. Dragging an end changes min/max and ticks the filter; min/max fields match. T1/T2 badges on tiered mods |
+| N6 | On a rare: switch "Rider Bow / Any Bow", the Pseudo / Base item presets, item chips (Item Level with its stepper, Corrupted), and the listing / listed / currency menus; search after each | Filters change as in Exiled Exchange 2; old results clear until you search again |
+| N7 | Press the ↗ button (and a bulk group's ↗) | The same search opens on the trade site in the browser; the poe.ninja row opens poe.ninja |
+| N8 | With the panel open, click in the game (or walk); then pin it (📌) and click in the game again | Unpinned: the panel closes. Pinned: it stays. Clicking a trade menu's items never closes it |
+| N9 | With the panel open, ⌘-Tab to another app and back | Unpinned: closed. Pinned: hidden while away, back with the game |
+| N11 | Pick another league from the header's league menu | The item is priced again in that league (poe.ninja and trade); this lasts until SwiftExile restarts |
+| N12 | Price check a rare weapon or armour with a socket; open the socket section, pick a rune | The rune's mod appears as an "added rune" filter; Each mod / Pseudo still work. A rare ring/amulet shows catalysts instead: pick one and a quality; the boosted mods change and the catalysts' cost shows |
+| N13 | Price check a currency stack (e.g. 3 Divine Orbs); change the Stock amount | poe.ninja shows the price each and for the whole amount |
+| N14 | Search a unique with runes in its sockets (e.g. The Brass Dome); open the socket section and click each socket; then click a listing | Sockets show the item's runes; clicking a socket jumps to its rune in the list. The listing opens that seller's item on the trade site |
+| N10 | Price check a unique with resistances (e.g. Blistering Bond); choose "Each mod" | Every modifier is its own filter (e.g. cold resistance), with its roll range slider; hidden filters show why they're hidden |
 
 Without the game: `build/SwiftExile.app/Contents/MacOS/SwiftExile --debug-native-item=<item.txt>` shows a saved item.
 
-Stash search, chat macros, Ctrl+wheel stash scrolling, and the heist OCR key are not implemented
-on macOS yet; their hotkeys log `this action is not implemented on macOS yet`.
+### Chat, stash search, stash scrolling
+
+Set these up in the overlay's settings (Exiled Exchange 2): chat commands under Chat, stash search
+under Stash search, and "Ctrl + scroll wheel switches stash tabs". The heist OCR key is not
+implemented on macOS (upstream runs it only on Windows).
+
+| # | Step | Expected |
+|---|---|---|
+| H8 | Press a chat command hotkey (e.g. `/hideout`, with "send" on) | Chat opens, the command is pasted and sent, chat goes back to what it was. Your clipboard is restored if "restore clipboard" is on |
+| H9 | Chat command `@last thanks` after someone whispered you | Reply goes to the last whisper |
+| H10 | Chat command `/invite @last` | Invites the last person who whispered you |
+| H11 | With the stash open, press a stash-search hotkey; also use the stash search widget in the overlay | The stash search field gets the text and highlights matches; from the overlay, the game gets focus first |
+| H12 | Turn on Ctrl + wheel stash scrolling; hold Ctrl and scroll with the mouse outside the stash grid, then over it | Outside: one tab per wheel step (no flood from a trackpad swipe). Over the grid: the game's own scrolling |
+| H13 | Press a chat hotkey twice quickly | The second press is ignored while the first is running (no garbled chat) |
+
+If Ctrl + scroll zooms the screen instead, macOS's accessibility zoom is set to Ctrl + scroll
+(System Settings ▸ Accessibility ▸ Zoom); pick another modifier there.
 
 ## Deferred regression checks
 

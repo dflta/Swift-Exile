@@ -50,6 +50,8 @@ final class PriceCheckEngine: NSObject, WKNavigationDelegate, WKScriptMessageHan
                 webView.load(URLRequest(url: pageURL))
             }
             let info = try await call(EngineInfo.self, "return await SwiftExileEngine.init()")
+            let currency = UserDefaults.standard.string(forKey: PriceCurrency.defaultsKey) ?? PriceCurrency.auto.rawValue
+            _ = try? await call([String: String].self, "return await SwiftExileEngine.setPriceCurrency(mode)", ["mode": currency])
             log("info [PriceCheck] engine ready (\(info.language), league \(info.league ?? "none"))")
             return info
         }
@@ -68,10 +70,59 @@ final class PriceCheckEngine: NSObject, WKNavigationDelegate, WKScriptMessageHan
                               ["text": clipboard, "advanced": advanced])
     }
 
-    func setStat(index: Int, disabled: Bool, min: Double?, max: Double?) async throws -> StatsUpdate {
-        try await call(StatsUpdate.self, "return SwiftExileEngine.setStat(index, disabled, min, max)",
-                       ["index": index, "disabled": disabled, "min": min.map { $0 as Any } ?? NSNull(), "max": max.map { $0 as Any } ?? NSNull()])
+    func setStat(index: Int, disabled: Bool, min: Double?, max: Double?) async throws -> FilterState {
+        try await call(FilterState.self, "return SwiftExileEngine.setStat(index, disabled, min, max)",
+                       ["index": index, "disabled": disabled, "min": Self.orNull(min), "max": Self.orNull(max)])
     }
+
+    func setItemFilter(key: String, disabled: Bool, value: Double?, max: Double?) async throws -> FilterState {
+        try await call(FilterState.self, "return SwiftExileEngine.setItemFilter(key, disabled, value, max)",
+                       ["key": key, "disabled": disabled, "value": Self.orNull(value), "max": Self.orNull(max)])
+    }
+
+    /// `key`: "listingType", "listed", or "currency"; nil value = any.
+    func setTradeOption(key: String, value: String?) async throws -> FilterState {
+        try await call(FilterState.self, "return SwiftExileEngine.setTradeOption(key, value)",
+                       ["key": key, "value": Self.orNull(value)])
+    }
+
+    func setAugment(index: Int, refName: String?) async throws -> EditResult {
+        try await call(EditResult.self, "return SwiftExileEngine.setAugment(index, refName)",
+                       ["index": index, "refName": Self.orNull(refName)])
+    }
+
+    func setCatalyst(refName: String, quality: Int) async throws -> EditResult {
+        try await call(EditResult.self, "return SwiftExileEngine.setCatalyst(refName, quality)",
+                       ["refName": refName, "quality": quality])
+    }
+
+    /// poe.ninja price for `count` items.
+    func ninja(count: Int) async throws -> NinjaPrice? {
+        struct Reply: Decodable { var ninja: NinjaPrice? }
+        return try await call(Reply.self, "return await SwiftExileEngine.ninjaFor(count)", ["count": count]).ninja
+    }
+
+    func setPriceCurrency(_ currency: PriceCurrency) async throws {
+        try await start()
+        _ = try await call([String: String].self, "return await SwiftExileEngine.setPriceCurrency(mode)", ["mode": currency.rawValue])
+    }
+
+    func setLeague(id: String) async throws {
+        _ = try await call([String: String].self, "return SwiftExileEngine.setLeague(id)", ["id": id])
+    }
+
+    func selectPreset(id: String) async throws -> FilterState {
+        try await call(FilterState.self, "return SwiftExileEngine.selectPreset(id)", ["id": id])
+    }
+
+    /// Trade site URL for the current search; `have` picks the currency for bulk exchange links.
+    /// - Parameter account: limit the search to one seller (their listing of this item).
+    func tradeLink(have: String?, account: String? = nil) async throws -> TradeLink {
+        try await call(TradeLink.self, "return SwiftExileEngine.tradeLink(have, account)",
+                       ["have": Self.orNull(have), "account": Self.orNull(account)])
+    }
+
+    private static func orNull<T>(_ value: T?) -> Any { value.map { $0 as Any } ?? NSNull() }
 
     func search() async throws -> SearchResults {
         try await call(SearchResults.self, "return await SwiftExileEngine.search()")
