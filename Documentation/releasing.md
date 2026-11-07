@@ -49,7 +49,9 @@ gh secret set SPARKLE_ED25519_PRIVATE --repo dflta/Swift-Exile < ~/.swiftexile-r
 1. Make sure `main` is green (the Test workflow) and the manual checklist in
    [testing.md](testing.md) passes for the changes in this release.
 2. In [CHANGELOG.md](../CHANGELOG.md), rename "Unreleased" to the version (`## 0.2.0`) and commit.
-   That section becomes the GitHub Release notes and the notes in the update dialog; the Release
+   Write it for players: what they can do now or what got fixed, in a few short lines, without
+   implementation details. That section becomes the GitHub Release notes and the notes in the
+   update dialog; the Release
    workflow stops if it's missing (`Scripts/release-notes.sh 0.2.0` shows what it will use).
 3. Tag and push:
 
