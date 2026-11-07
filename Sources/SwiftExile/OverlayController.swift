@@ -129,13 +129,21 @@ final class OverlayController {
     private func scheduleFocusUpdate() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if self.shouldReclaimKey() {
-                self.reclaimAttempts += 1
-                self.trace("reclaiming key focus (attempt \(self.reclaimAttempts))")
-                NSApp.activate()
+            switch self.reclaim.decide(
+                now: Date(), isInteractable: self.model.isInteractable,
+                panelIsKey: self.panel.isKeyWindow, gameFrontmost: self.tracker.gameFrontmost
+            ) {
+            case .retake(let activateApp):
+                self.trace("reclaiming key focus (attempt \(self.reclaim.attempts)\(activateApp ? ", activating app" : ""))")
+                if activateApp { NSApp.activate() }
                 self.panel.makeKeyAndOrderFront(nil)
                 self.panel.makeFirstResponder(self.webHost.webView)
                 return
+            case .giveUp:
+                let hub = self.hub
+                Task { await hub.log("warn [Overlay] the game kept taking keyboard focus back; overlay returned to click-through") }
+            case .none:
+                break
             }
             let effects = self.model.focusChanged(gameFrontmost: self.tracker.gameFrontmost, overlayIsKey: self.panel.isKeyWindow)
             if !effects.isEmpty {
@@ -145,19 +153,10 @@ final class OverlayController {
         }
     }
 
-    /// Wine (seen with NotProton/CrossOver 27) can re-activate the game the instant our panel
-    /// takes key focus (risk R6). Within a short window after becoming interactable, take focus
-    /// back a bounded number of times instead of dropping to click-through.
-    private var interactableSince: Date?
-    private var reclaimAttempts = 0
-
-    private func shouldReclaimKey() -> Bool {
-        guard model.isInteractable, !panel.isKeyWindow, tracker.gameFrontmost,
-              let since = interactableSince, Date().timeIntervalSince(since) < 0.4,
-              reclaimAttempts < 2
-        else { return false }
-        return true
-    }
+    /// Retakes keyboard focus when the game grabs it back (risk R6); see `FocusReclaimPolicy`.
+    private var reclaim = FocusReclaimPolicy()
+    /// `SWIFTEXILE_ACTIVATION=app` activates SwiftExile on every interactable switch (diagnostics).
+    private let alwaysActivate = ProcessInfo.processInfo.environment["SWIFTEXILE_ACTIVATION"] == "app"
 
     /// Focus tracing for development (`SWIFTEXILE_TRACE_FOCUS=1`).
     private let traceFocus = ProcessInfo.processInfo.environment["SWIFTEXILE_TRACE_FOCUS"] == "1"
@@ -198,12 +197,13 @@ final class OverlayController {
             case .broadcastFocusChange(let game, let overlay, let usingHotkey):
                 sendFocusChange(game: game, overlay: overlay, usingHotkey: usingHotkey)
             case .setInteractable(true):
-                interactableSince = Date()
-                reclaimAttempts = 0
+                reclaim.began(at: Date())
                 panel.ignoresMouseEvents = false
+                if alwaysActivate { NSApp.activate() }
                 panel.makeKeyAndOrderFront(nil)
                 panel.makeFirstResponder(webHost.webView)
             case .setInteractable(false):
+                reclaim.ended()
                 panel.ignoresMouseEvents = true
                 if panel.isKeyWindow {
                     // Ordering out the key panel hands keyboard focus back to the frontmost app.
@@ -212,6 +212,8 @@ final class OverlayController {
                 }
             case .focusGame:
                 if let pid = tracker.current?.pid, let game = NSRunningApplication(processIdentifier: pid) {
+                    // Cooperative activation (macOS 14): yield to the game, then ask it to activate.
+                    NSApp.yieldActivation(to: game)
                     game.activate(from: .current, options: [])
                 }
             case .show:

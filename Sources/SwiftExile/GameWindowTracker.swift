@@ -39,6 +39,9 @@ final class GameWindowTracker {
     private var tokens: [NSObjectProtocol] = []
     private var presentationObservation: NSKeyValueObservation?
     private let log: (String) -> Void
+    /// Last event that may move or resize the game window, for time-to-correct measurements
+    /// (go/no-go criterion G1). Cleared 2 s after it happened.
+    private var lastTrigger: (name: String, at: Date)?
 
     init(log: @escaping (String) -> Void) {
         self.log = log
@@ -61,14 +64,14 @@ final class GameWindowTracker {
             }
         })
         tokens.append(workspace.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.transitionHappened() }
+            MainActor.assumeIsolated { self?.transitionHappened("Space change") }
         })
         tokens.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.transitionHappened() }
+            MainActor.assumeIsolated { self?.transitionHappened("display change") }
         })
         // Games (Wine included) often enter fullscreen by hiding the menu bar and Dock (mac.mm:586-592).
         presentationObservation = NSApp.observe(\.currentSystemPresentationOptions) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.transitionHappened() }
+            DispatchQueue.main.async { self?.transitionHappened("presentation options change") }
         }
         scan()
     }
@@ -171,6 +174,7 @@ final class GameWindowTracker {
     fileprivate func handle(notification: String) {
         switch notification {
         case kAXMovedNotification, kAXResizedNotification:
+            if lastTrigger == nil { markTrigger(notification == kAXMovedNotification ? "window moved" : "window resized") }
             refreshGeometry()
         case kAXUIElementDestroyedNotification:
             log("info [GameWindow] window closed")
@@ -192,14 +196,16 @@ final class GameWindowTracker {
         if current == nil {
             scan()
         } else {
+            markTrigger("app activation")
             reportFocus()
             settle()
         }
     }
 
     /// Space change, display change, or presentation options change.
-    private func transitionHappened() {
+    private func transitionHappened(_ trigger: String) {
         guard current != nil else { return }
+        markTrigger(trigger)
         refreshGeometry()
         reportFocus()
         settle()
@@ -230,6 +236,16 @@ final class GameWindowTracker {
         }
     }
 
+    private func markTrigger(_ name: String) {
+        let at = Date()
+        lastTrigger = (name, at)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            MainActor.assumeIsolated {
+                if self?.lastTrigger?.at == at { self?.lastTrigger = nil }
+            }
+        }
+    }
+
     func refreshGeometry() {
         guard var snapshot = current, let window = windowElement, let geometry = readGeometry(window) else { return }
         let contentRect = cocoaContentRect(geometry)
@@ -237,7 +253,8 @@ final class GameWindowTracker {
         snapshot.geometry = geometry
         snapshot.contentRect = contentRect
         current = snapshot
-        log("debug [GameWindow] frame \(Self.describe(geometry.frame)), titled \(geometry.isTitled), native fullscreen \(geometry.isNativeFullScreen) → overlay \(Self.describe(contentRect))")
+        let timing = lastTrigger.map { " \(Int(Date().timeIntervalSince($0.at) * 1000)) ms after \($0.name)" } ?? ""
+        log("debug [GameWindow] geometry changed\(timing): frame \(Self.describe(geometry.frame)), titled \(geometry.isTitled), native fullscreen \(geometry.isNativeFullScreen) → overlay \(Self.describe(contentRect))")
         onGeometryChange?(snapshot)
     }
 
