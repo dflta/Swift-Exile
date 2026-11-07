@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var nativePriceCheck: NativePriceCheckController?
     private var itemCheck: ItemCheckController?
+    private var engine: PriceCheckEngine?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installSignalHandlers()
@@ -130,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         await hub.on(.updateHostConfig) { [weak self] payload in
             guard let config = try? payload?.decode(HostConfig.self) else { return }
-            await MainActor.run { self?.applyHostConfig(config) }
+            await MainActor.run { self?.applyHostConfig(config, fromOverlay: true) }
         }
         await hub.on(.reparseLog) { [weak self] _ in
             await MainActor.run { self?.gameLog?.reparse() }
@@ -202,7 +203,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         native.overlayWindowNumber = { [weak overlay] in overlay?.panel.windowNumber ?? 0 }
         shortcuts.nativePriceCheck = native
         nativePriceCheck = native
+        self.engine = engine
         let itemCheck = ItemCheckController(engine: engine)
+        itemCheck.model.settings = overlaySettings
         itemCheck.isGame = { [weak self] pid in self?.status.gamePid == pid }
         itemCheck.overlayWindowNumber = { [weak overlay] in overlay?.panel.windowNumber ?? 0 }
         itemCheck.onStashSearch = { [weak shortcuts] text in shortcuts?.stashSearchFromOverlay(text) }
@@ -384,6 +387,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
                 print("[snapshot] settings pages saved to \(folder)")
+                Task {
+                    let modifiers = await self.mapModifiers()
+                    let new = modifiers.filter { $0.tag == "poe2db" }.map(\.matcher)
+                    print("[snapshot] map modifiers: \(modifiers.count), from poe2db: \(new)")
+                }
             }
         }
         if let path = options.debugItemCheckPath {
@@ -412,10 +420,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Hotkeys and options from the overlay's settings, whether the web overlay sent them or they
     /// were computed from the file after a change in SwiftExile's window.
-    func applyHostConfig(_ config: HostConfig) {
-        overlay?.hostConfigChanged(config)
+    /// - Parameter fromOverlay: the web overlay sent them (it does on every page load).
+    func applyHostConfig(_ config: HostConfig, fromOverlay: Bool = false) {
+        overlay?.hostConfigChanged(config, fromOverlay: fromOverlay)
         shortcuts?.hostConfigChanged(config)
         gameLog?.hostConfigChanged(config)
+    }
+
+    /// Every map modifier, for the Map Check settings page.
+    func mapModifiers() async -> [MapModifier] {
+        guard let engine else { return [] }
+        return (try? await engine.mapModifiers()) ?? []
     }
 
     /// Runs a stash search from SwiftExile's window (the game gets focus first).

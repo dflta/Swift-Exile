@@ -9,17 +9,20 @@ final class ItemCheckModel {
     enum Phase: Equatable {
         case idle
         case ready(ItemCheck)
+        case map(MapCheck)
         case failed(String)
     }
 
     var phase: Phase = .idle
     /// The copied item text, for "Price check".
     var clipboard = ""
+    /// Exiled Exchange 2's settings, where the map check's modifier ratings live.
+    var settings: OverlaySettingsStore?
 }
 
 /// The native item check (Exiled Exchange 2's item info: wiki and poe2db links, stash searches,
-/// weapon DPS), with the item's modifiers and tiers. Maps and contracts still get Exiled Exchange 2's
-/// map check. Opens next to the game's stash or inventory panel, like the price check.
+/// weapon DPS), with the item's modifiers and tiers, and the map check for waystones, tablets, and
+/// contracts. Opens next to the game's stash or inventory panel, like the price check.
 @MainActor
 final class ItemCheckController {
     static let width: CGFloat = 400
@@ -87,8 +90,8 @@ final class ItemCheckController {
     var isVisible: Bool { panel.isVisible }
     var isKey: Bool { panel.isKeyWindow }
 
-    /// Reads the item and shows it. Returns false when Exiled Exchange 2 should show it instead (a map,
-    /// or text the parser doesn't understand).
+    /// Reads the item and shows it. Returns false when Exiled Exchange 2 should show it instead (text
+    /// the parser doesn't understand).
     /// - Parameters:
     ///   - cursor: where the item was, Quartz coordinates.
     ///   - game: the game's drawable area, Quartz coordinates.
@@ -99,9 +102,11 @@ final class ItemCheckController {
         } catch {
             return false
         }
-        guard case .item(let check) = result else { return false }
         model.clipboard = clipboard
-        model.phase = .ready(check)
+        switch result {
+        case .item(let check): model.phase = .ready(check)
+        case .map(let map): model.phase = .map(map)
+        }
         self.cursor = cursor
         let frame = PriceCheckPlacement.frame(game: game, cursorX: cursor.x, size: CGSize(width: Self.width, height: Self.maxHeight))
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
@@ -191,6 +196,8 @@ struct ItemCheckView: View {
                 }
                 .frame(maxHeight: ItemCheckController.maxHeight - 120)
                 .fixedSize(horizontal: false, vertical: true)
+            } else if case .map(let map) = model.phase {
+                MapCheckView(map: map, store: model.settings, close: actions.close, moved: actions.moved)
             } else {
                 Text("Reading item…").foregroundStyle(.secondary).padding(14)
             }

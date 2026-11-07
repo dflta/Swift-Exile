@@ -1,0 +1,7 @@
+{
+  "_comment": "Map (tablet) modifiers in the current game (poe2db.tw, 2026-11-08) that Exiled Exchange 2's data doesn't have yet. Listed in the map check settings and rateable; their text is matched with numbers as #.",
+  "matchers": [
+    "Delirium Fog in Map spawns #% increased Mirror Shards",
+    "Expeditions have #% Surpassing chance to contain an additional Verisium Remnant"
+  ]
+}

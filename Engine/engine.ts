@@ -46,9 +46,11 @@ import {
   type BaseType,
 } from "@/assets/data";
 import augmentSupplement from "./augment-supplement.json";
+import mapModsSupplement from "./map-mods-supplement.json";
 import { applyCatalyst, getItemEditorType } from "@/web/price-check/item-editor/item-editor";
 import { getCategoryGroups, useAugment } from "@/web/price-check/item-editor/augment";
 import { ARMOUR } from "@/parser/meta";
+import { prepareMapStats } from "@/web/map-check/prepare-map-stats";
 import { itemIsModifiable } from "@/parser/ParsedItem";
 import {
   groupLinesByMod,
@@ -987,7 +989,7 @@ export function itemInfo(clipboard: string): string {
     category === ItemCategory.HeistBlueprint ||
     category === ItemCategory.Invitation ||
     item.info.refName === "Expedition Logbook";
-  if (mapLike) return json({ mapLike: true });
+  if (mapLike) return json({ map: describeMap(item) });
 
   const language = AppConfig().language;
   const poedb = poe2dbPath(item);
@@ -1030,6 +1032,68 @@ export function itemInfo(clipboard: string): string {
     fractured: item.isFractured ?? false,
     sanctified: item.isSanctified ?? false,
   });
+}
+
+/** The map check (MapCheck.vue): the map's properties and its modifiers, each with the text
+ *  Exiled Exchange 2 rates it by (`matcher`, as stored in its settings). */
+function describeMap(item: ParsedItem) {
+  const percent = (label: string, value: number | undefined) =>
+    value ? { label, value: `${value > 0 ? "+" : ""}${value}%` } : null;
+  const properties = [
+    percent("Item rarity", item.mapItemRarity),
+    percent("Pack size", item.mapPackSize),
+    percent("Magic monsters", item.mapMagicMonsters),
+    percent("Rare monsters", item.mapRareMonsters),
+    percent("Monster rarity", item.mapMonsterRarity),
+    percent("Monster effectiveness", item.mapEffectiveness),
+    percent("Waystone drop chance", item.mapDropChance),
+    percent("Gold", item.mapGold),
+    item.mapRevives != null ? { label: "Revives", value: String(item.mapRevives) } : null,
+  ].filter((p) => p != null);
+  return {
+    item: describeItem(item),
+    title: itemTitle(item),
+    tier: item.mapTier ?? null,
+    areaLevel: item.areaLevel ?? null,
+    properties,
+    stats: prepareMapStats(item).map((stat) => ({
+      matcher: stat.matcher,
+      text: stat.roll != null ? stat.matcher.replace("#", String(stat.roll)) : stat.matcher,
+      type: stat.type ?? null,
+    })),
+    // Not in Exiled Exchange 2's data (newer modifiers): still rateable by their text.
+    unknown: item.unknownModifiers.map((mod) => ({ text: mod.text, matcher: unknownMatcher(mod.text) })),
+  };
+}
+
+/** "Delirium Fog in Map spawns 20(12-26)% increased Mirror Shards" → "… spawns #% increased …". */
+function unknownMatcher(text: string): string {
+  return text
+    .replace(/\(\s*-?[\d.]+\s*[-–—]+\s*-?[\d.]+\s*\)/g, "")
+    .replace(/\+?(-?\d+(\.\d+)?)/g, "#")
+    .trim();
+}
+
+/** Every map modifier to rate in the map check settings (settings-maps.vue findAllAreaMods), plus
+ *  SwiftExile's supplement of newer ones from poe2db. */
+export function mapModifiers(): string {
+  const out: Array<{ matcher: string; tag: string | null }> = [];
+  for (const stat of Data.STATS_ITERATOR("AreaMods")) {
+    if (!stat.fromAreaMods && !stat.fromUberAreaMods && !stat.fromHeistAreaMods) continue;
+    const tag =
+      stat.fromHeistAreaMods && !stat.fromAreaMods
+        ? "heist"
+        : stat.fromUberAreaMods && !stat.fromAreaMods
+          ? "uber"
+          : null;
+    for (const c of stat.matchers) out.push({ matcher: c.string, tag });
+  }
+  const known = new Set(out.map((entry) => entry.matcher));
+  for (const matcher of mapModsSupplement.matchers) {
+    if (!known.has(matcher)) out.push({ matcher, tag: "poe2db" });
+  }
+  out.sort((a, b) => a.matcher.localeCompare(b.matcher));
+  return json(out);
 }
 
 /** "Level 11 Bone Blast" for each "Grants Skill: …" line. */

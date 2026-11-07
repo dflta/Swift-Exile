@@ -79,7 +79,7 @@ struct HotkeysPage: View {
                 }
                 .help("Shows the item's modifiers and tiers, links, and stash searches")
                 Toggle("Native item check", isOn: $nativeItemCheck)
-                    .help("Off: Exiled Exchange 2's item info. Maps and contracts always use Exiled Exchange 2's map check")
+                    .help("Also the map check for waystones, tablets, and contracts. Off: Exiled Exchange 2's item info and map check")
                 LabeledContent("Open on the wiki") { HotkeyField(hotkey: store.widgetHotkey("item-check", "wikiKey")) }
                 LabeledContent("Open on poe2db") { HotkeyField(hotkey: store.widgetHotkey("item-check", "poedbKey")) }
                 LabeledContent("Open on Craft of Exile") { HotkeyField(hotkey: store.widgetHotkey("item-check", "craftOfExileKey")) }

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Native map check.** The item check hotkey on a waystone, tablet, or contract shows its
+  properties and modifiers. Click a modifier to mark it dangerous, warning, or good; ratings are
+  kept per profile (I, II, III) and shared with Exiled Exchange 2's map check.
+- **Settings ▸ Map Check:** rate any map modifier ahead of time, with search and "only rated".
+  Includes newer tablet modifiers Exiled Exchange 2 doesn't list yet, and modifiers it doesn't
+  recognize on a map can still be rated.
+
 ## 0.1.3
 
 - **Native item check.** Set its hotkey in Settings ▸ Hotkeys. It shows the item's modifiers with

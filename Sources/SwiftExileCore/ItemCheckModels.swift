@@ -1,21 +1,59 @@
 import Foundation
 
 /// The native item check's data, from the engine's `itemInfo` (upstream's ItemInfo.vue plus the
-/// item's modifiers as the game describes them).
+/// item's modifiers as the game describes them, or MapCheck.vue for maps).
 public enum ItemCheckResult: Decodable, Equatable, Sendable {
-    /// A map, contract, or logbook: Exiled Exchange 2's map check shows it instead.
-    case mapLike
+    /// A waystone, tablet, contract, or logbook: the map check.
+    case map(MapCheck)
     case item(ItemCheck)
 
-    private enum CodingKeys: String, CodingKey { case mapLike }
+    private enum CodingKeys: String, CodingKey { case map }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        if try container.decodeIfPresent(Bool.self, forKey: .mapLike) == true {
-            self = .mapLike
+        if let map = try container.decodeIfPresent(MapCheck.self, forKey: .map) {
+            self = .map(map)
         } else {
             self = .item(try ItemCheck(from: decoder))
         }
+    }
+}
+
+/// A map's properties and modifiers for the map check.
+public struct MapCheck: Decodable, Equatable, Sendable {
+    public struct Property: Decodable, Equatable, Sendable {
+        public var label: String
+        public var value: String
+    }
+
+    public struct Stat: Decodable, Equatable, Sendable {
+        /// What Exiled Exchange 2 rates the modifier by ("Monsters deal #% of Damage as Extra Fire").
+        public var matcher: String
+        /// The modifier with this map's roll.
+        public var text: String
+        public var type: String?
+    }
+
+    public var item: PriceCheckItem
+    public var title: String?
+    public var tier: Int?
+    public var areaLevel: Int?
+    public var properties: [Property]
+    public var stats: [Stat]
+    /// Modifiers Exiled Exchange 2's data doesn't have (newer ones); rated by their text.
+    public var unknown: [Stat]
+}
+
+/// A map modifier to rate in the map check settings.
+public struct MapModifier: Decodable, Equatable, Sendable, Identifiable {
+    public var matcher: String
+    /// "uber", "heist", "poe2db" (SwiftExile's supplement), or nil.
+    public var tag: String?
+    public var id: String { matcher }
+
+    public init(matcher: String, tag: String? = nil) {
+        self.matcher = matcher
+        self.tag = tag
     }
 }
 

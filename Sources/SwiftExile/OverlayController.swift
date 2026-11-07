@@ -145,13 +145,15 @@ final class OverlayController {
     func renderState(shouldShow: Bool) { apply(model.renderState(shouldShow: shouldShow)) }
     func usedRecently(isOverlay: Bool) { wasUsedRecently = isOverlay }
 
-    func hostConfigChanged(_ config: HostConfig) {
+    func hostConfigChanged(_ config: HostConfig, fromOverlay: Bool = false) {
         overlayKey = config.overlayKey
         tracker.windowTitle = config.windowTitle
         apply(model.setHideOverlayOnBlur(config.hideOverlayOnBlur))
         // The renderer sends its host config on every (re)load; replay the current state so a
-        // reloaded page leaves its loading screen without waiting for the next focus change.
-        if model.isAttached {
+        // reloaded page leaves its loading screen without waiting for the next focus change. Not
+        // for changes made in SwiftExile's settings: "attached" shows Exiled Exchange 2's
+        // "ready and running" notice.
+        if fromOverlay, model.isAttached {
             send(IpcMessage(.overlayAttached))
             sendFocusChange(game: model.gameActive, overlay: model.isInteractable, usingHotkey: false)
         }

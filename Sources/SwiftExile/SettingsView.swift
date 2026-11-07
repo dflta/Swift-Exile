@@ -17,7 +17,7 @@ struct SettingsView: View {
     }
 
     enum Page: String, CaseIterable, Identifiable {
-        case game, hotkeys, priceCheck, chat, stashSearch, leveling, permissions, about
+        case game, hotkeys, priceCheck, mapCheck, chat, stashSearch, leveling, permissions, about
         var id: String { rawValue }
 
         var title: String {
@@ -25,6 +25,7 @@ struct SettingsView: View {
             case .game: return "Game"
             case .hotkeys: return "Hotkeys"
             case .priceCheck: return "Price Check"
+            case .mapCheck: return "Map Check"
             case .chat: return "Chat Commands"
             case .stashSearch: return "Stash Search"
             case .leveling: return "Leveling"
@@ -38,6 +39,7 @@ struct SettingsView: View {
             case .game: return "gamecontroller"
             case .hotkeys: return "keyboard"
             case .priceCheck: return "tag"
+            case .mapCheck: return "map"
             case .chat: return "text.bubble"
             case .stashSearch: return "magnifyingglass"
             case .leveling: return "chart.line.uptrend.xyaxis"
@@ -67,6 +69,7 @@ struct SettingsView: View {
         case .game: GameTab(status: status, store: store)
         case .hotkeys: OverlaySettingsPage(store: store) { HotkeysPage(store: store) }
         case .priceCheck: PriceCheckTab(actions: actions, store: store)
+        case .mapCheck: OverlaySettingsPage(store: store) { MapCheckPage(store: store, actions: actions) }
         case .chat: OverlaySettingsPage(store: store) { ChatCommandsPage(store: store) }
         case .stashSearch: OverlaySettingsPage(store: store) { StashSearchPage(store: store, actions: actions) }
         case .leveling: LevelingTab(actions: actions, store: store)

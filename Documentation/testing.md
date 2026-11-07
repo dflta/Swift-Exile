@@ -126,9 +126,13 @@ Set Settings ▸ Hotkeys ▸ Item check first (e.g. Alt + W; it's not set by def
 | I3 | Press Wiki, poe2db, and (English game, rare) Craft of Exile | Each opens the item's page in the browser |
 | I4 | Open the stash, item check an item, press "Find in stash"; then press the Find in stash hotkey on a few items in a row; then item check an item with a price note (set in a premium stash tab) and press "Same price note" | The panel closes, the game comes to the front, and the stash search box gets the item's name in quotes, never the whole item text. Right after a copy the name is typed (log: "typing the search"); with a layout that can't type it, it's pasted after ~2 s. "Same price note" appears only for items with a note and searches for the note |
 | I5 | Press "Price check" | The item check closes and the native price check opens for the same item |
-| I6 | Item check a waystone | Exiled Exchange 2's map check appears (not the native panel) |
+| I6 | Item check a waystone (also a tablet) | The native map check: name, tier, area level, the waystone's properties (item rarity, pack size, monsters, revives), and its modifiers. Unrecognized ones show in orange |
+| I6b | Click a waystone modifier a few times; switch the profile (I/II/III); item check another waystone with the same modifier | Clicks cycle dangerous (red) → warning (orange) → good (green) → seen → dangerous; each profile keeps its own ratings; the rating shows on other waystones and in Exiled Exchange 2's map check (native item check off) |
+| I6c | Settings ▸ Map Check ▸ "Mark modifiers I haven't rated" on; item check a waystone | Unrated modifiers have an eye; clicking it marks the modifier seen (the eye fades), clicking again makes it new |
+| I6d | Settings ▸ Map Check: search "pack size", rate one modifier warning, another dangerous; click a rating again; turn on "Only rated"; switch the profile | 176 modifiers (174 from Exiled Exchange 2, 2 newer ones from poe2db marked "New"); a rating shows on waystones with that modifier; clicking the active rating clears it; "Only rated" lists just the rated ones; each profile keeps its own |
+| I6e | Item check a waystone or tablet with a modifier Exiled Exchange 2 doesn't recognize | It's listed with an orange ✦ and can still be rated; on the Map Check page it shows as "Not in list" once rated |
 | I7 | Click in the game, press Esc, or ⌘-Tab away; drag the header | Each click, Esc, or tab-out closes it; dragging moves it and it grows downward from there |
-| I8 | Turn Settings ▸ Hotkeys ▸ Native item check off and item check an item | Exiled Exchange 2's item info appears |
+| I8 | Turn Settings ▸ Hotkeys ▸ Native item check off and item check an item and a waystone | Exiled Exchange 2's item info and map check appear |
 | I9 | With the item check open, press the price check key on another item | The price check opens and the item check closes |
 | I10 | Item check a quest item | A small panel with its name (green), Wiki, and Find in stash; no price check button |
 

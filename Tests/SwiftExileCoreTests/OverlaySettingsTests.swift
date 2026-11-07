@@ -65,4 +65,20 @@ import Testing
         #expect(Set(uses["Shift + T"] ?? []) == ["Item check", "Open on the wiki"])
         #expect(uses["Shift + Space"] == ["Overlay"])
     }
+
+    @Test func ratesMapModifiersPerProfile() throws {
+        var settings = try #require(OverlaySettings(json: #"""
+        {"widgets":[{"wmType":"item-check","wmId":2,"maps":{"profile":2,"showNewStats":true,
+          "selectedStats":[{"matcher":"Area contains two Unique Bosses","decision":"g--"}]}}]}
+        """#))
+        #expect(settings.mapCheck.profile == 2)
+        #expect(settings.mapCheck.decision(for: "Area contains two Unique Bosses") == "-") // profile 2
+        settings.setMapDecision("d", for: "Area contains two Unique Bosses")
+        #expect(settings.mapCheck.decisions["Area contains two Unique Bosses"] == "gd-")
+        settings.setMapDecision("w", for: "#% maximum Player Resistances")
+        #expect(settings.mapCheck.decisions["#% maximum Player Resistances"] == "-w-")
+        settings.setMapProfile(1)
+        #expect(settings.mapCheck.decision(for: "Area contains two Unique Bosses") == "g")
+        #expect(MapCheckSettings.next(after: "-") == "d" && MapCheckSettings.next(after: "g") == "s")
+    }
 }

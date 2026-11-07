@@ -31,8 +31,21 @@ import Testing
         #expect(check.mods[1].generation == "suffix" && check.mods[1].tier == 1 && check.mods[1].lines.count == 2)
     }
 
-    @Test func mapsGoToTheOverlay() throws {
-        #expect(try EngineJSON.decode(ItemCheckResult.self, from: #"{"mapLike":true}"#) == .mapLike)
+    @Test func decodesAMap() throws {
+        let json = #"""
+        {"map":{"item":{"name":"Waystone (Tier 15)","refName":"Waystone (Tier 15)","namespace":"ITEM","icon":"","rarity":"Rare","category":"Map","itemLevel":79,"quality":null,"gemLevel":null,"stackSize":null,"corrupted":false,"unidentified":false},
+         "title":"Haunted Haven","tier":15,"areaLevel":79,
+         "properties":[{"label":"Item rarity","value":"+50%"}],
+         "stats":[{"matcher":"Monsters deal #% of Damage as Extra Fire","text":"Monsters deal 30% of Damage as Extra Fire","type":"explicit"}],
+         "unknown":[{"text":"Delirium Fog in Map spawns 20(12-26)% increased Mirror Shards","matcher":"Delirium Fog in Map spawns #% increased Mirror Shards"}]}}
+        """#
+        guard case .map(let map) = try EngineJSON.decode(ItemCheckResult.self, from: json) else {
+            Issue.record("expected a map")
+            return
+        }
+        #expect(map.tier == 15 && map.title == "Haunted Haven")
+        #expect(map.stats.first?.matcher == "Monsters deal #% of Damage as Extra Fire")
+        #expect(map.unknown.first?.matcher == "Delirium Fog in Map spawns #% increased Mirror Shards")
     }
 
     @Test func engineErrorsThrow() {

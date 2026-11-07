@@ -76,6 +76,12 @@ final class PriceCheckEngine: NSObject, WKNavigationDelegate, WKScriptMessageHan
         return try await call(ItemCheckResult.self, "return SwiftExileEngine.itemInfo(text)", ["text": clipboard])
     }
 
+    /// Every map modifier to rate in the map check settings.
+    func mapModifiers() async throws -> [MapModifier] {
+        try await start()
+        return try await call([MapModifier].self, "return SwiftExileEngine.mapModifiers()")
+    }
+
     func setStat(index: Int, disabled: Bool, min: Double?, max: Double?) async throws -> FilterState {
         try await call(FilterState.self, "return SwiftExileEngine.setStat(index, disabled, min, max)",
                        ["index": index, "disabled": disabled, "min": Self.orNull(min), "max": Self.orNull(max)])
