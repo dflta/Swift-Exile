@@ -30,8 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private var nativePriceCheck: NativePriceCheckController?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         installSignalHandlers()
+        UserDefaults.standard.register(defaults: [ShortcutController.nativePriceCheckDefaultsKey: true])
         // Info.plist sets LSUIElement (menu bar app, no Dock icon). The debug browser window
         // behaves like a normal app instead.
         if options.browserMode { NSApp.setActivationPolicy(.regular) }
@@ -139,6 +142,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let overlay = OverlayController(webHost: webHost, tracker: tracker, hub: hub, status: status)
         let shortcuts = ShortcutController(hub: hub, overlay: overlay, status: status)
         overlay.onGameAttached = { [weak shortcuts] in shortcuts?.gameAttached() }
+        // Native SwiftUI price check (preview), driven by upstream's logic in a hidden web view.
+        let engine = PriceCheckEngine(serverPort: status.serverPort, log: { line in Task { await hub.log(line) } })
+        let native = NativePriceCheckController(model: PriceCheckModel(engine: engine, log: { line in Task { await hub.log(line) } }))
+        shortcuts.nativePriceCheck = native
+        nativePriceCheck = native
+        Task { _ = try? await engine.start() } // warm up: item data and prices load before the first check
         self.webHost = webHost
         self.tracker = tracker
         self.overlay = overlay
@@ -247,6 +256,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     await hub.send(.lastActive, message)
                 }
             }
+            }
+        }
+        if let path = options.debugNativeItemPath {
+            DispatchQueue.main.asyncAfter(deadline: .now() + options.debugItemAt) { [weak self] in
+                guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return }
+                let shown = self?.shortcuts?.showNativePriceCheck(text: text, position: CGPoint(x: 1800, y: 600), focus: true, holdKey: nil,
+                                                                  fallbackArea: NSScreen.screens.first?.frame) ?? false
+                if let hub = self?.hub { Task { await hub.log("debug [Host] native debug item \(shown ? "shown" : "not shown (game not attached or preview off)")") } }
+            }
+        }
+        if let path = options.nativeSnapshotPath {
+            DispatchQueue.main.asyncAfter(deadline: .now() + options.snapshotDelay) { [weak self] in
+                let saved = self?.nativePriceCheck?.snapshot(to: URL(fileURLWithPath: path)) ?? false
+                print("[snapshot] native price check \(saved ? "saved \(path)" : "failed")")
             }
         }
         if let seconds = options.quitAfter {

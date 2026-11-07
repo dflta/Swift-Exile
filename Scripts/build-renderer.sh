@@ -22,6 +22,9 @@ fi
 npm run make-index-files --silent
 # `npm run build` also runs vue-tsc type checking; upstream CI covers that, so call Vite directly.
 npx vite build --logLevel warn
+# Headless price-check engine (Engine/engine.ts) built from the same upstream sources.
+npx vite build --config "$ROOT/Engine/vite.config.mjs"
+echo "engine built: $ROOT/Engine/dist/engine.js"
 for lang in public/data/*/; do
   if [ -f "$lang/items.ndjson" ] && [ ! -f "$lang/items-ref.index.bin" ]; then
     echo "missing index files in $lang" >&2

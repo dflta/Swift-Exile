@@ -22,6 +22,12 @@ final class ShortcutController {
     private var altModel = AltVisibilityModel()
     private var altHideWork: DispatchWorkItem?
     private var permissionTimer: Timer?
+    /// Native SwiftUI price check (preview). When enabled, price-check items go there instead of
+    /// to Exiled Exchange 2's web widget.
+    var nativePriceCheck: NativePriceCheckController?
+    static let nativePriceCheckDefaultsKey = "nativePriceCheck"
+    private enum AreaTarget { case renderer, native }
+    private var areaTarget: AreaTarget = .renderer
 
     init(hub: EventHub, overlay: OverlayController, status: HostStatus) {
         self.hub = hub
@@ -70,6 +76,7 @@ final class ShortcutController {
     }
 
     func trackArea(_ payload: TrackAreaPayload) {
+        areaTarget = .renderer
         areaModel.start(WidgetAreaModel.Area(
             holdKey: payload.holdKey,
             closeThreshold: payload.closeThreshold,
@@ -128,11 +135,20 @@ final class ShortcutController {
             guard let name = KeyNames.byMacKeyCode[event.keyCode] else { return false }
             let hotkey = Hotkey(key: name, ctrl: event.ctrl, shift: event.shift, alt: event.alt)
             if logKeys { log("debug [Shortcuts] Keydown \(hotkey.string)") }
-            // Hotkeys are registered only while the game is active (Shortcuts.ts:61-71).
-            guard overlay.isGameActive, !event.command, let action = active[hotkey] else { return false }
+            // Hotkeys are registered only while the game is active (Shortcuts.ts:61-71), and also
+            // while the native price check has focus: it's our panel, with the game right behind it,
+            // so the next item can be checked without closing it first.
+            let nativeFocused = nativePriceCheck?.isKey ?? false
+            guard overlay.isGameActive || nativeFocused, !event.command, let action = active[hotkey] else { return false }
             swallowedKeyUps.insert(event.keyCode)
             if !event.isRepeat {
-                DispatchQueue.main.async { [weak self] in self?.run(action) }
+                if nativeFocused {
+                    // Give focus back to the game first, so the copy chord reaches it, not the panel.
+                    nativePriceCheck?.releaseFocus(toGame: status.gamePid)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in self?.run(action) }
+                } else {
+                    DispatchQueue.main.async { [weak self] in self?.run(action) }
+                }
             }
             return true
         }
@@ -171,7 +187,8 @@ final class ShortcutController {
                 let text = try await poller.readItemText(afterPrepare: { [weak self] in
                     await MainActor.run { self?.pressCopyKeys(modifiers, held: held) }
                 })
-                self?.deliverItem(text: text, target: target, position: position, focusOverlay: focusOverlay, startedAt: startedAt)
+                self?.deliverItem(text: text, target: target, position: position, focusOverlay: focusOverlay,
+                                  holdKey: held.first(where: { $0 == "Ctrl" || $0 == "Alt" }), startedAt: startedAt)
             } catch {
                 self?.log("warn [ClipboardPoller] No item text found.")
             }
@@ -187,15 +204,37 @@ final class ShortcutController {
         }
     }
 
-    private func deliverItem(text: String, target: String, position: CGPoint, focusOverlay: Bool, startedAt: Date) {
+    private func deliverItem(text: String, target: String, position: CGPoint, focusOverlay: Bool, holdKey: String?, startedAt: Date) {
         areaModel.stop()
         let advanced = text.contains("{ ") ? "with advanced mod descriptions" : "without advanced mod descriptions"
         log("debug [Shortcuts] item copied in \(Int(Date().timeIntervalSince(startedAt) * 1000)) ms → \(target), \(advanced)")
+        if target == "price-check", showNativePriceCheck(text: text, position: position, focus: focusOverlay, holdKey: holdKey) {
+            return
+        }
         send(.lastActive, try? IpcMessage(.itemText, ItemTextPayload(
             target: target, clipboard: text, x: position.x, y: position.y, focusOverlay: focusOverlay)))
         if focusOverlay && overlay.wasUsedRecently {
             overlay.activate(source: "copy-item")
         }
+    }
+
+    /// Sends the item to the native price check if it's enabled. Returns false to fall back to the renderer.
+    @discardableResult
+    /// - Parameter fallbackArea: Cocoa rect to use when no game window is attached (debug runs).
+    func showNativePriceCheck(text: String, position: CGPoint, focus: Bool, holdKey: String?, fallbackArea: CGRect? = nil) -> Bool {
+        guard let native = nativePriceCheck,
+              UserDefaults.standard.bool(forKey: Self.nativePriceCheckDefaultsKey),
+              let gameCocoa = status.gameRect ?? fallbackArea
+        else { return false }
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let game = ScreenCoordinates.cocoaRect(fromQuartz: gameCocoa, primaryHeight: primaryHeight) // involution: Cocoa → Quartz
+        native.show(clipboard: text, cursor: position, game: game, focus: focus)
+        if !focus {
+            // Same behavior as upstream's track-area for the web widget (PriceCheckWindow.vue:265-288).
+            areaTarget = .native
+            areaModel.start(WidgetAreaModel.Area(holdKey: holdKey ?? "", closeThreshold: 40, from: position, rect: native.areaRect))
+        }
+        return true
     }
 
     // MARK: Pointer
@@ -206,11 +245,21 @@ final class ShortcutController {
         }
         guard areaModel.isTracking else { return }
         let effects: [WidgetAreaModel.Effect]
+        let interactable = areaTarget == .native ? (nativePriceCheck?.isKey ?? false) : overlay.isInteractable
         switch event.kind {
         case .moved:
-            effects = areaModel.mouseMoved(to: event.location, ctrl: event.ctrl, alt: event.alt, overlayInteractable: overlay.isInteractable)
+            effects = areaModel.mouseMoved(to: event.location, ctrl: event.ctrl, alt: event.alt, overlayInteractable: interactable)
         case .down:
             effects = areaModel.mouseDown(at: event.location)
+        }
+        if areaTarget == .native, let native = nativePriceCheck {
+            for effect in effects {
+                switch effect {
+                case .hideExclusiveWidget, .focusGame: native.hide()
+                case .activateOverlay: native.activate()
+                }
+            }
+            return
         }
         for effect in effects {
             switch effect {

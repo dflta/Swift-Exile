@@ -9,7 +9,7 @@ APP="$ROOT/build/SwiftExile.app"
 DIST="$ROOT/upstream/renderer/dist"
 
 cd "$ROOT"
-if [ "${SKIP_RENDERER:-0}" != "1" ] || [ ! -f "$DIST/index.html" ]; then
+if [ "${SKIP_RENDERER:-0}" != "1" ] || [ ! -f "$DIST/index.html" ] || [ ! -f "$ROOT/Engine/dist/engine.js" ]; then
   "$ROOT/Scripts/build-renderer.sh"
 fi
 
@@ -36,6 +36,9 @@ UPSTREAM_SHA="$(git -C "$ROOT/upstream" rev-parse --short HEAD 2>/dev/null || ec
 /usr/libexec/PlistBuddy -c "Set :EE2UpstreamVersion $UPSTREAM_VERSION ($UPSTREAM_SHA)" "$APP/Contents/Info.plist"
 
 rsync -a --delete --exclude '*.map' "$DIST/" "$APP/Contents/Resources/renderer/"
+# Headless price-check engine, served at /engine/ next to the renderer.
+mkdir -p "$APP/Contents/Resources/renderer/engine"
+cp "$ROOT/Engine/index.html" "$ROOT/Engine/dist/engine.js" "$APP/Contents/Resources/renderer/engine/"
 cp "$ROOT/upstream/main/build/icons/icon.png" "$APP/Contents/Resources/icon.png"
 
 # Upstream license must ship with the bundled renderer (MIT).

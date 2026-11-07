@@ -11,6 +11,7 @@ final class HostStatus {
     var dataDir = ""
     var accessibilityTrusted = AXIsProcessTrusted()
 
+    var gamePid: pid_t?
     var gameTitle: String?
     var gameAppName: String?
     var gameFlavor: GameFlavor = .unknown
@@ -28,6 +29,7 @@ final class HostStatus {
     var isAttached: Bool { gameTitle != nil }
 
     func attached(_ snapshot: GameWindowTracker.Snapshot) {
+        gamePid = snapshot.pid
         gameTitle = snapshot.title
         gameAppName = snapshot.appName
         gameFlavor = snapshot.flavor
@@ -37,6 +39,7 @@ final class HostStatus {
     }
 
     func detached() {
+        gamePid = nil
         gameTitle = nil
         gameAppName = nil
         gameFlavor = .unknown

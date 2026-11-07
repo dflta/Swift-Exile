@@ -23,6 +23,10 @@ struct LaunchOptions {
     var debugItemAt: Double = 6
     /// Send the debug item this many times, 3 s apart (latency measurements).
     var debugItemRepeat = 1
+    /// Development check: show this file's item in the native price check.
+    var debugNativeItemPath: String?
+    /// Development check: render the native price check to this PNG after `snapshotDelay`.
+    var nativeSnapshotPath: String?
 
     static func parse(
         arguments: [String] = CommandLine.arguments,
@@ -64,6 +68,10 @@ struct LaunchOptions {
                 options.toggleAt = Double(value ?? "")
             case "--debug-item":
                 options.debugItemPath = value
+            case "--debug-native-item":
+                options.debugNativeItemPath = value
+            case "--native-snapshot":
+                options.nativeSnapshotPath = value
             case "--debug-item-repeat":
                 options.debugItemRepeat = Int(value ?? "") ?? 1
             case "--debug-item-at":

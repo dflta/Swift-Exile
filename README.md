@@ -6,7 +6,7 @@ SwiftExile replaces the Electron shell with a native Swift app and is moving the
 
 Not affiliated with or endorsed by Grinding Gear Games.
 
-> **Status:** early prototype (day 4). Native SwiftUI menu bar item and Settings window; the overlay follows the game window and global hotkeys open the price check (tested with the Windows client under NotProton/CrossOver). The native SwiftUI price check is not built yet; the overlay still shows Exiled Exchange 2's web widgets, which will be replaced by SwiftUI step by step.
+> **Status:** prototype. Native SwiftUI menu bar item, Settings window, and a **native SwiftUI price check (preview)**: item header, poe.ninja price, mod filters, trade listings and bulk exchange offers. Its data comes from Exiled Exchange 2's own parser and trade logic, run headless (`Engine/`). Other widgets still use Exiled Exchange 2's web UI in the overlay; menu bar ▸ "Native Price Check (Preview)" switches the price check back to it. Tested with the Windows client under NotProton/CrossOver.
 
 ## Build
 
@@ -27,6 +27,7 @@ open build/SwiftExile.app
 | `SWIFTEXILE_DATA_DIR=<dir>` | Use another settings folder instead of `~/Library/Application Support/exiled-exchange-2/apt-data` (shared with the Electron app) |
 | `SWIFTEXILE_DEV_SERVER_URL=http://localhost:5173` | Load the renderer from a Vite dev server (`npm run dev` in `upstream/renderer`); the host listens on 8584 |
 | `--browser-mode` | Run the renderer as a plain browser client instead of overlay mode |
+| `--debug-native-item=<file>` | Show a saved item's text in the native price check (no game needed) |
 | `--listen=[host][:port]` | Server address, as in upstream |
 | `SWIFTEXILE_TRACE_FOCUS=1` | Log every overlay focus change and focus reclaim |
 | `SWIFTEXILE_ACTIVATION=app` | Activate SwiftExile whenever the overlay becomes interactive (diagnostics) |

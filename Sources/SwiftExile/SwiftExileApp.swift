@@ -24,6 +24,7 @@ struct MenuBarContent: View {
     let status: HostStatus
     let actions: AppDelegate
     @Environment(\.openSettings) private var openSettings
+    @AppStorage(ShortcutController.nativePriceCheckDefaultsKey) private var nativePriceCheck = true
 
     var body: some View {
         if let title = status.gameTitle {
@@ -41,6 +42,8 @@ struct MenuBarContent: View {
             actions.toggleOverlay()
         }
         .disabled(!status.isAttached)
+
+        Toggle("Native Price Check (Preview)", isOn: $nativePriceCheck)
 
         Button("Open in Browser") { actions.openInBrowser() }
         Button("Open Settings Folder") { actions.openDataFolder() }

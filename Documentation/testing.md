@@ -92,6 +92,19 @@ Global hotkeys work only while the game window is in front, like upstream.
 | H6 | Press a hotkey while another app is in front | Nothing happens; the key reaches that app normally |
 | H7 | Hover nothing and press the price check key | Log: `No item text found.`; nothing else happens |
 
+### Native price check (preview)
+
+With menu bar ▸ "Native Price Check (Preview)" on (default):
+
+| # | Step | Expected |
+|---|---|---|
+| N1 | Price check a unique with the hold key | Native panel next to the stash/inventory panel: name in unique colour, poe.ninja price, filters, trade listings searched automatically. Moving the mouse away (Alt released) closes it |
+| N2 | Price check a rare with the locked key | Panel takes focus; tick filters, change a minimum (Enter), press "Search trade"; listings update. Esc closes it |
+| N3 | Price check currency (e.g. Divine Orb) | "Search bulk exchange"; offers grouped by the currency you pay with |
+| N4 | Turn the preview off and repeat N1 | Exiled Exchange 2's web price check appears instead |
+
+Without the game: `build/SwiftExile.app/Contents/MacOS/SwiftExile --debug-native-item=<item.txt>` shows a saved item.
+
 Stash search, chat macros, Ctrl+wheel stash scrolling, and the heist OCR key are not implemented
 on macOS yet; their hotkeys log `this action is not implemented on macOS yet`.
 
