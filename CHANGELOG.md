@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5
 
 - SwiftExile shows its own "ready" notice when it finds the game, instead of Exiled Exchange 2's.
   Turn it off in Settings ▸ Game.
