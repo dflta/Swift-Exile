@@ -145,6 +145,14 @@ final class OverlayController {
     func renderState(shouldShow: Bool) { apply(model.renderState(shouldShow: shouldShow)) }
     func usedRecently(isOverlay: Bool) { wasUsedRecently = isOverlay }
 
+    /// Settings ▸ Game ▸ "Restore the overlay when you return to the game".
+    static let restoreOnReturnKey = "restoreOverlayOnReturn"
+
+    func setRestoreOnReturn(_ on: Bool) {
+        trace("restore on return: \(on)")
+        model.setRestoreOnReturn(on)
+    }
+
     func hostConfigChanged(_ config: HostConfig, fromOverlay: Bool = false) {
         overlayKey = config.overlayKey
         tracker.windowTitle = config.windowTitle

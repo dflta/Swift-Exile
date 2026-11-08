@@ -32,13 +32,20 @@ import Testing
 
     @Test func typedStashSearchSkipsTheClipboard() {
         #expect(TextBox.stashSearchTyped("\"Regal Orb\"") == [
-            .tap("F", modifiers: ["Ctrl"]), .typeText("\"Regal Orb\""), .tap("Enter"),
+            .tap("F", modifiers: ["Ctrl"]), .typeText("\"Regal Orb\""),
         ])
+    }
+
+    @Test func stashPanelReachesTheLowerRows() {
+        let game = CGRect(x: 0, y: 0, width: 1728, height: 1080)
+        #expect(StashScroll.isStashPanel(CGPoint(x: 300, y: 950), game: game))   // low stash row
+        #expect(!StashScroll.isStashArea(CGPoint(x: 300, y: 950), game: game))   // below the scroll area
+        #expect(!StashScroll.isStashPanel(CGPoint(x: 1400, y: 600), game: game)) // inventory side
     }
 
     @Test func stashSearchUsesCtrlF() {
         #expect(TextBox.stashSearch("rarity: unique", command: "Meta") == [
-            .setClipboard("rarity: unique"), .tap("F", modifiers: ["Ctrl"]), .tap("V", modifiers: ["Meta"]), .tap("Enter"),
+            .setClipboard("rarity: unique"), .tap("F", modifiers: ["Ctrl"]), .tap("V", modifiers: ["Meta"]),
         ])
     }
 

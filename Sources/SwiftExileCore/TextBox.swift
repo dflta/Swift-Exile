@@ -52,13 +52,13 @@ public enum TextBox {
         return steps
     }
 
-    /// `stashSearch` (text-box.ts:57-72): Ctrl+F (also on macOS), paste, Enter.
+    /// `stashSearch` (text-box.ts:57-72): Ctrl+F (also on macOS), paste. Upstream also presses
+    /// Enter; the stash filters without it, and with the stash closed Enter opens the chat box.
     public static func stashSearch(_ text: String, command: String) -> [TextBoxStep] {
         [
             .setClipboard(text),
             .tap("F", modifiers: ["Ctrl"]),
             .tap("V", modifiers: [command]),
-            .tap("Enter"),
         ]
     }
 
@@ -68,7 +68,6 @@ public enum TextBox {
         [
             .tap("F", modifiers: ["Ctrl"]),
             .typeText(text),
-            .tap("Enter"),
         ]
     }
 
@@ -85,6 +84,14 @@ public enum StashScroll {
     /// - Parameters:
     ///   - point: mouse location (Quartz, origin top-left).
     ///   - game: the game's drawable area (Quartz).
+    /// Whether a point is over the stash panel's item grid (lower than the tab-scroll area above
+    /// reaches): an item copied there means the stash is open.
+    public static func isStashPanel(_ point: CGPoint, game: CGRect) -> Bool {
+        let sidebarWidth = (game.height * 370 / 600).rounded()
+        guard point.x >= game.minX, point.x <= game.minX + sidebarWidth else { return false }
+        return point.y > game.minY + game.height * 0.08 && point.y < game.minY + game.height * 0.95
+    }
+
     public static func isStashArea(_ point: CGPoint, game: CGRect) -> Bool {
         // Upstream's uiSidebarWidth: the left panel is 370 px wide at 800×600 (GameWindow.ts:27-31).
         let sidebarWidth = (game.height * 370 / 600).rounded()

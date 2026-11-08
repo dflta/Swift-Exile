@@ -161,6 +161,18 @@ import Testing
         #expect(effects == [.broadcastFocusChange(game: false, overlay: false, usingHotkey: false), .hide])
     }
 
+    @Test func restoreOptionKeepsTheOverlayOpenAfterReturning() {
+        var model = attachedAndFocused()
+        model.setRestoreOnReturn(true)
+        _ = model.toggle() // overlay open
+        _ = model.focusChanged(gameFrontmost: true, overlayIsKey: true)
+        #expect(model.focusChanged(gameFrontmost: false, overlayIsKey: false).contains(.hide)) // another app
+        #expect(model.isInteractable)
+        let back = model.focusChanged(gameFrontmost: true, overlayIsKey: false)
+        #expect(back.contains(.retakeFocus) && back.contains(.show))
+        #expect(model.isInteractable && model.isVisible)
+    }
+
     @Test func returningToGameWhileInteractableDropsInteractable() {
         // OverlayWindow.ts:193-195: isActive && isInteractable → isInteractable = false.
         var model = attachedAndFocused()

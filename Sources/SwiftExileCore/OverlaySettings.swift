@@ -68,6 +68,12 @@ public struct OverlaySettings: Equatable, Sendable {
         }
     }
 
+    /// Show a notice over the game when it's found (Exiled Exchange 2's General setting, on by default).
+    public var showAttachNotification: Bool {
+        get { Self.bool(root["showAttachNotification"], default: true) }
+        set { root["showAttachNotification"] = .bool(newValue) }
+    }
+
     // MARK: Chat commands
 
     public struct Command: Equatable, Sendable, Identifiable {

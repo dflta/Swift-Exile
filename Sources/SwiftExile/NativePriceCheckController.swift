@@ -158,7 +158,8 @@ final class NativePriceCheckController {
             return
         }
         guard panel.isVisible else { return }
-        if model.isPinned {
+        // Pinned, or "restore the overlay when you return" on: hide until the game is back.
+        if model.isPinned || UserDefaults.standard.bool(forKey: OverlayController.restoreOnReturnKey) {
             suspended = true
             panel.orderOut(nil)
         } else {

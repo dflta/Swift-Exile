@@ -26,6 +26,9 @@ public struct OverlayFocusModel: Equatable, Sendable {
     public private(set) var isVisible = false
     public private(set) var shouldShowOverlay = true
     public private(set) var hideOverlayOnBlur = false
+    /// SwiftExile option: an overlay that was open when you switched to another app is open again
+    /// when you come back to the game (upstream closes it).
+    public private(set) var restoreOnReturn = false
     private var isOverlayKeyUsed = false
 
     public init() {}
@@ -51,7 +54,9 @@ public struct OverlayFocusModel: Equatable, Sendable {
         // itself (risk R6: under Wine in windowed fullscreen, about once a second). Stay
         // interactable and take focus back. Returning from another app is different: that follows
         // upstream and drops interactable (OverlayWindow.ts:193-195).
-        if isInteractable && gameFrontmost && gameWasFrontmost && !overlayIsKey {
+        // With `restoreOnReturn`, coming back from another app is treated the same way: the overlay
+        // was open, so it stays open and takes focus back.
+        if isInteractable && gameFrontmost && (gameWasFrontmost || restoreOnReturn) && !overlayIsKey {
             return [.retakeFocus] + syncVisibility()
         }
         return setGameActive(gameFrontmost && !overlayIsKey) + syncVisibility()
@@ -86,6 +91,10 @@ public struct OverlayFocusModel: Equatable, Sendable {
     public mutating func renderState(shouldShow: Bool) -> [Effect] {
         shouldShowOverlay = shouldShow
         return syncVisibility()
+    }
+
+    public mutating func setRestoreOnReturn(_ value: Bool) {
+        restoreOnReturn = value
     }
 
     public mutating func setHideOverlayOnBlur(_ value: Bool) -> [Effect] {

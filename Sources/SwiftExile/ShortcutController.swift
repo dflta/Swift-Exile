@@ -32,7 +32,9 @@ final class ShortcutController {
     var nativePriceCheck: NativePriceCheckController?
     var itemCheck: ItemCheckController?
     /// When the game last put item text on the clipboard, and the pasteboard's change count then.
-    private var lastGameCopy: (at: Date, changeCount: Int)?
+    /// Also whether the item was in the stash area: then the stash is open, and typing a search
+    /// into it can't trigger the game's own key bindings.
+    private var lastGameCopy: (at: Date, changeCount: Int, fromStash: Bool)?
     static let nativeItemCheckDefaultsKey = "nativeItemCheck"
     static let nativePriceCheckDefaultsKey = "nativePriceCheck"
     private enum AreaTarget { case renderer, native }
@@ -237,6 +239,7 @@ final class ShortcutController {
             waiting.task.cancel()
             saved = waiting.saved
             waitingMacro = nil
+            onClipboardWait?(nil)
             log("debug [Shortcuts] chat/stash macro replaced one that was still waiting")
         }
         textBoxBusy = true
@@ -246,12 +249,16 @@ final class ShortcutController {
         let pasteboard = NSPasteboard.general
         var wait = Duration.zero
         var typedKeys: [String: [KeyboardLayoutMap.Key]] = [:]
-        let waitMs = UserDefaults.standard.object(forKey: Self.wineClipboardWaitKey) as? Int ?? 2100
+        // `integer(forKey:)` also reads a value written as text (`defaults write … 0`).
+        let waitMs = UserDefaults.standard.object(forKey: Self.wineClipboardWaitKey) != nil
+            ? UserDefaults.standard.integer(forKey: Self.wineClipboardWaitKey) : 2100
         let sinceCopyMs = lastGameCopy.map { Int(Date().timeIntervalSince($0.at) * 1000) } ?? Int.max
         if status.gameFlavor.isWine, sinceCopyMs < waitMs {
             let layout = KeyboardLayoutMap.current()
             let texts = (typed ?? []).compactMap { if case .typeText(let text) = $0 { return text } else { return nil } }
-            if let typed, let layout, !texts.isEmpty,
+            // Typed keys reach the game as its own key bindings (inventory, map…) if the stash
+            // isn't open, so type only when the item was in the stash; otherwise paste after the wait.
+            if let typed, let layout, !texts.isEmpty, lastGameCopy?.fromStash == true,
                texts.allSatisfy({ layout.keys(for: $0) != nil }) {
                 steps = typed
                 for text in texts { typedKeys[text] = layout.keys(for: text) }
@@ -275,6 +282,7 @@ final class ShortcutController {
                     if !started {
                         if wait > .zero {
                             do { try await Task.sleep(for: wait) } catch { return } // replaced: the newer one restores
+                            self?.onClipboardWait?(nil)
                         }
                         self?.waitingMacro = nil
                         started = true
@@ -300,7 +308,10 @@ final class ShortcutController {
             }
             self?.textBoxBusy = false
         }
-        if wait > .zero { waitingMacro = (task, saved) }
+        if wait > .zero {
+            waitingMacro = (task, saved)
+            onClipboardWait?(Double(wait.components.seconds) + Double(wait.components.attoseconds) / 1e18)
+        }
     }
 
     /// A macro still waiting for Wine's clipboard check, and the clipboard to restore after it.
@@ -308,6 +319,10 @@ final class ShortcutController {
     /// The clipboard from before a cancelled macro, for the next one to restore.
     private var carriedClipboard: (text: String?, at: Date)?
     static let wineClipboardWaitKey = "wineClipboardWaitMs"
+    /// Settings ▸ Hotkeys ▸ show a notice while a stash search waits for Wine's clipboard.
+    static let clipboardWaitNoticeKey = "showClipboardWaitNotice"
+    /// A search started waiting for Wine's clipboard (seconds), or stopped waiting (nil).
+    var onClipboardWait: ((TimeInterval?) -> Void)?
 
     /// Another item was copied while a macro waits: the game's clipboard changed again, so that macro
     /// would paste the item. Drop it (a new search follows if the copy was for one).
@@ -317,6 +332,7 @@ final class ShortcutController {
         waitingMacro = nil
         textBoxBusy = false
         carriedClipboard = (waiting.saved, Date())
+        onClipboardWait?(nil)
         log("debug [Shortcuts] chat/stash macro dropped: another item was copied while it waited")
     }
 
@@ -364,7 +380,16 @@ final class ShortcutController {
 
     private func deliverItem(text: String, target: String, position: CGPoint, focusOverlay: Bool, holdKey: String?, startedAt: Date) {
         areaModel.stop()
-        lastGameCopy = (Date(), NSPasteboard.general.changeCount)
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let game = status.gameRect.map { ScreenCoordinates.cocoaRect(fromQuartz: $0, primaryHeight: primaryHeight) }
+        let fromStash = game.map { StashScroll.isStashPanel(position, game: $0) } ?? false
+        if let game, game.height > 0 {
+            // Where the item was, relative to the game's height (to tune the stash panel's area).
+            log(String(format: "debug [Shortcuts] item at x %.2f, y %.2f of the game's height → %@",
+                       (position.x - game.minX) / game.height, (position.y - game.minY) / game.height,
+                       fromStash ? "stash panel" : "not the stash"))
+        }
+        lastGameCopy = (Date(), NSPasteboard.general.changeCount, fromStash)
         let advanced = text.contains("{ ") ? "with advanced mod descriptions" : "without advanced mod descriptions"
         log("debug [Shortcuts] item copied in \(Int(Date().timeIntervalSince(startedAt) * 1000)) ms → \(target), \(advanced)")
         if target == "price-check", showNativePriceCheck(text: text, position: position, focus: focusOverlay, holdKey: holdKey) {

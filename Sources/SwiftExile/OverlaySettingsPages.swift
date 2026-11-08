@@ -49,6 +49,7 @@ extension OverlaySettingsStore {
 struct HotkeysPage: View {
     let store: OverlaySettingsStore
     @AppStorage(ShortcutController.nativeItemCheckDefaultsKey) private var nativeItemCheck = true
+    @AppStorage(ShortcutController.clipboardWaitNoticeKey) private var clipboardWaitNotice = true
 
     var body: some View {
         Form {
@@ -87,8 +88,9 @@ struct HotkeysPage: View {
                     HotkeyField(hotkey: store.widgetHotkey("item-check", "stashSearchKey"))
                 } label: {
                     Text("Find in stash")
-                    Text("Under Wine the game keeps the copied item on its clipboard for about 2 s, so the name is typed into the stash search instead of pasted. If your keyboard layout can't type it, it's pasted after that wait.")
+                    Text("Under Wine the game keeps the copied item on its clipboard for about 2 s. For an item in the open stash the name is typed into the stash search instead; otherwise (or if your keyboard layout can't type it) it's pasted after that wait.")
                 }
+                Toggle("Show a notice while the search waits for Wine", isOn: $clipboardWaitNotice)
                 LabeledContent("Find same price in stash") {
                     HStack(spacing: 6) {
                         Picker("Search for", selection: store.widgetText("item-check", "samePricedType", fallback: "both")) {

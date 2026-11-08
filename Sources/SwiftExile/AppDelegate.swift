@@ -43,11 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var nativePriceCheck: NativePriceCheckController?
     private var itemCheck: ItemCheckController?
     private var engine: PriceCheckEngine?
+    private let notice = NoticeController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installSignalHandlers()
         UserDefaults.standard.register(defaults: [ShortcutController.nativePriceCheckDefaultsKey: true,
-                                                  ShortcutController.nativeItemCheckDefaultsKey: true])
+                                                  ShortcutController.nativeItemCheckDefaultsKey: true,
+                                                  ShortcutController.clipboardWaitNoticeKey: true])
         // Not during scripted runs (snapshots, --quit-after): Sparkle may ask about automatic checks.
         if options.quitAfter == nil && options.nativeSnapshotPath == nil { updates.start() }
         // Info.plist sets LSUIElement (menu bar app, no Dock icon). The debug browser window
@@ -191,10 +193,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         xpTracker.isEnabled = gameLog.nativeTracker
         experienceTracker = xpTracker
         hideWebExperienceWidget(gameLog.nativeTracker, webHost: webHost)
+        // SwiftExile shows its own "ready" notice (ReadyNoticeController) instead of the overlay's.
+        webHost.setPageStyle("hide-ready-notice", css: #"[class*="_widget_"]:has(> [class*="_box_"] > .py-2.px-4 > .text-base) { display: none !important; }"#)
         if gameLog.nativeTracker { gameLog.setNativeTracker(true, save: false) }
-        overlay.onGameAttached = { [weak shortcuts, weak gameLog] in
+        overlay.setRestoreOnReturn(UserDefaults.standard.bool(forKey: OverlayController.restoreOnReturnKey))
+        shortcuts.onClipboardWait = { [weak self] seconds in
+            guard let self else { return }
+            guard let seconds else { self.notice.hide(); return }
+            guard UserDefaults.standard.bool(forKey: ShortcutController.clipboardWaitNoticeKey),
+                  let game = self.status.gameRect else { return }
+            self.notice.show(.clipboardWait, over: game, for: seconds + 0.5)
+        }
+        overlay.onGameAttached = { [weak self, weak shortcuts, weak gameLog] in
             shortcuts?.gameAttached()
             gameLog?.gameAttached()
+            self?.showReadyNotice()
         }
         // Native SwiftUI price check (preview), driven by upstream's logic in a hidden web view.
         let engine = PriceCheckEngine(serverPort: status.serverPort, log: { line in Task { await hub.log(line) } })
@@ -386,6 +399,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(folder)/overlay-bar.png"))
                     }
                 }
+                _ = self.notice.snapshot(.ready, to: URL(fileURLWithPath: "\(folder)/ready-notice.png"))
+                _ = self.notice.snapshot(.clipboardWait, to: URL(fileURLWithPath: "\(folder)/clipboard-wait-notice.png"))
                 print("[snapshot] settings pages saved to \(folder)")
                 Task {
                     let modifiers = await self.mapModifiers()
@@ -501,6 +516,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// While the native tracker is on, Exiled Exchange 2's own XP widget would sit in the same
     /// place, so it's hidden on the overlay page (CSS only; the shared settings file is untouched).
     /// Upstream's CSS module classes keep their source names ("_xpContainer_<hash>").
+    /// Settings ▸ Game ▸ restore the overlay when you return to the game.
+    func restoreOverlayChanged(_ on: Bool) {
+        overlay?.setRestoreOnReturn(on)
+    }
+
+    /// SwiftExile's own "ready" notice when the game is found (Exiled Exchange 2's is hidden).
+    private func showReadyNotice() {
+        guard overlaySettings.settings?.showAttachNotification ?? true else { return }
+        // The game's window frame settles a moment after it's found.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, let game = self.status.gameRect else { return }
+            self.notice.show(.ready, over: game, for: 2.5)
+        }
+    }
+
     private func hideWebExperienceWidget(_ hide: Bool, webHost: WebViewHost) {
         webHost.setPageStyle("hide-xp-widget", css: hide
             ? #"[class*="_widget_"]:has(> [class*="_xpContainer_"]) { display: none !important; }"#

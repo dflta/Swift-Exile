@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- SwiftExile shows its own "ready" notice when it finds the game, instead of Exiled Exchange 2's.
+  Turn it off in Settings ▸ Game.
+- New option in Settings ▸ Game: restore the overlay when you return to the game. What you had
+  open (the overlay, settings, a price check, the item check) is there again after you visit the
+  trade site or another app.
+- Find in stash shows a short "Waiting for Wine's clipboard" notice while it waits (Wine passes
+  the clipboard to the game about 2 s after a copy). Turn it off in Settings ▸ Hotkeys.
+- Fixed: Find in stash with the stash closed could open game menus or the chat box.
+
 ## 0.1.4
 
 - **Native map check.** The item check hotkey on a waystone, tablet, or contract shows its

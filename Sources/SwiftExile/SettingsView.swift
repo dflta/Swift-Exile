@@ -66,7 +66,7 @@ struct SettingsView: View {
     private var detail: some View {
         let store = actions.overlaySettings
         switch page ?? .game {
-        case .game: GameTab(status: status, store: store)
+        case .game: GameTab(status: status, store: store, actions: actions)
         case .hotkeys: OverlaySettingsPage(store: store) { HotkeysPage(store: store) }
         case .priceCheck: PriceCheckTab(actions: actions, store: store)
         case .mapCheck: OverlaySettingsPage(store: store) { MapCheckPage(store: store, actions: actions) }
@@ -98,6 +98,8 @@ private struct OverlaySettingsPage<Content: View>: View {
 private struct GameTab: View {
     let status: HostStatus
     let store: OverlaySettingsStore
+    let actions: AppDelegate
+    @AppStorage(OverlayController.restoreOnReturnKey) private var restoreOnReturn = false
 
     var body: some View {
         Form {
@@ -136,7 +138,21 @@ private struct GameTab: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            Section {
+                Toggle("Restore the overlay when you return to the game", isOn: $restoreOnReturn)
+                    .onChange(of: restoreOnReturn) { _, on in actions.restoreOverlayChanged(on) }
+            } header: {
+                Text("Overlay")
+            } footer: {
+                Text("Everything hides while you're in another app. On: when you come back, what you had open is there again: the open overlay, SwiftExile's settings, a price check, the item check. Off: the overlay and unpinned panels close when you switch away.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("SwiftExile") {
+                if store.settings != nil {
+                    Toggle("Show a notice when the game is found", isOn: Binding(
+                        get: { store.settings?.showAttachNotification ?? true },
+                        set: { value in store.update { $0.showAttachNotification = value } }))
+                }
                 PathRow(title: "Settings folder", path: status.dataDir)
                 LabeledContent("Local server", value: status.serverPort > 0 ? "127.0.0.1:\(status.serverPort)" : "Starting…")
             }

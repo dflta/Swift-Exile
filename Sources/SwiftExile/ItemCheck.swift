@@ -36,6 +36,9 @@ final class ItemCheckController {
     private var activationObserver: NSObjectProtocol?
     private var keyMonitor: Any?
     private var cursor: CGPoint = .zero
+    /// Hidden while another app is in front, to come back with the game ("restore the overlay when
+    /// you return").
+    private var suspended = false
 
     /// Whether a process is the game (set by the app delegate).
     var isGame: (pid_t) -> Bool = { _ in false }
@@ -74,8 +77,21 @@ final class ItemCheckController {
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             let pid = app.processIdentifier
             MainActor.assumeIsolated {
-                guard let self, pid != getpid(), !self.isGame(pid) else { return }
-                self.hide() // another app came to the front
+                guard let self, pid != getpid() else { return }
+                if self.isGame(pid) {
+                    if self.suspended {
+                        self.suspended = false
+                        self.panel.orderFrontRegardless()
+                    }
+                    return
+                }
+                guard self.panel.isVisible else { return }
+                if UserDefaults.standard.bool(forKey: OverlayController.restoreOnReturnKey) {
+                    self.suspended = true
+                    self.panel.orderOut(nil)
+                } else {
+                    self.hide() // another app came to the front
+                }
             }
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -113,12 +129,14 @@ final class ItemCheckController {
         let cocoa = ScreenCoordinates.cocoaRect(fromQuartz: frame, primaryHeight: primaryHeight)
         anchorTop = CGPoint(x: cocoa.minX, y: cocoa.maxY)
         panel.setFrameTopLeftPoint(anchorTop!)
+        suspended = false
         panel.orderFrontRegardless()
         panel.makeKey()
         return true
     }
 
     func hide() {
+        suspended = false
         guard panel.isVisible else { return }
         panel.orderOut(nil)
     }
