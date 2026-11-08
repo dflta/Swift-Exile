@@ -185,3 +185,56 @@ extension View {
         modifier(WindowDragModifier(onEnded: onEnded))
     }
 }
+
+/// Sizes a panel to its SwiftUI content and keeps the panel's top-left corner in place.
+///
+/// The hosting view sits inside a plain container instead of being the window's content view (or its
+/// controller the window's content view controller): otherwise SwiftUI resizes the window in the middle
+/// of a layout pass, and moving the window back up from the resize notification re-entered AppKit's
+/// layout until the main thread's stack ran out (crashes on 2026-11-07 and 2026-11-08, in
+/// `NSHostingView.updateAnimatedWindowSize`). Here the size SwiftUI wants is applied on the next turn
+/// of the run loop, in one frame change that already has the right origin.
+@MainActor
+final class TopAnchoredSizer {
+    private weak var panel: NSWindow?
+    private let hosting: NSViewController
+    private var observation: NSKeyValueObservation?
+    private var pending = false
+    /// Top-left corner (Cocoa) to keep; nil keeps wherever the panel's top is now.
+    var anchorTop: CGPoint?
+
+    init(panel: NSWindow, hosting: NSViewController) {
+        self.panel = panel
+        self.hosting = hosting
+        let container = NSView(frame: NSRect(origin: .zero, size: panel.frame.size))
+        panel.contentView = container
+        hosting.view.frame = container.bounds
+        hosting.view.autoresizingMask = [.width, .height]
+        container.addSubview(hosting.view)
+        observation = hosting.observe(\.preferredContentSize, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.schedule() }
+        }
+    }
+
+    /// Applies the current size on the next turn of the run loop (several changes collapse into one).
+    func schedule() {
+        guard !pending else { return }
+        pending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pending = false
+            self.apply()
+        }
+    }
+
+    /// Sizes the panel now (outside a layout pass) with its top-left corner at the anchor.
+    func apply() {
+        guard let panel else { return }
+        let size = hosting.preferredContentSize
+        guard size.width > 0, size.height > 0 else { return }
+        let top = anchorTop ?? CGPoint(x: panel.frame.minX, y: panel.frame.maxY)
+        let frame = NSRect(x: top.x, y: top.y - size.height, width: size.width, height: size.height).integral
+        guard frame != panel.frame else { return }
+        panel.setFrame(frame, display: true)
+    }
+}

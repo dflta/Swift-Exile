@@ -32,7 +32,7 @@ final class NativePriceCheckController {
     private let panel = PriceCheckPanel()
     private var hosting: NSHostingController<PriceCheckView>!
     private var keyMonitor: Any?
-    private var resizeObserver: NSObjectProtocol?
+    private var sizer: TopAnchoredSizer!
     private var activationObserver: NSObjectProtocol?
     /// Pinned panel hidden because another app came to the front; shown again with the game.
     private var suspended = false
@@ -41,7 +41,7 @@ final class NativePriceCheckController {
     /// SwiftExile's own overlay window, which covers the game and must not count as "inside".
     var overlayWindowNumber: () -> Int = { 0 }
     /// Top-left corner (Cocoa) to keep while SwiftUI resizes the panel.
-    private var anchorTop: CGPoint?
+    private var anchorTop: CGPoint? { didSet { sizer?.anchorTop = anchorTop } }
     /// Where the panel can be at most (Quartz), for the mouse-away tracker.
     private(set) var areaRect: CGRect = .zero
 
@@ -52,11 +52,7 @@ final class NativePriceCheckController {
         self.hosting = hosting
         hosting.rootView = PriceCheckView(model: model, onClose: { [weak self] in self?.hide() },
                                           onMoved: { [weak self] in self?.movedByUser() })
-        panel.contentViewController = hosting
-
-        resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.keepAnchored() }
-        }
+        sizer = TopAnchoredSizer(panel: panel, hosting: hosting)
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
@@ -98,6 +94,7 @@ final class NativePriceCheckController {
         updateArea()
         suspended = false
         panel.setFrameTopLeftPoint(anchorTop!)
+        sizer.apply()
         panel.orderFrontRegardless()
         if focus { panel.makeKey() }
         Task { await model.show(clipboard: clipboard, advanced: focus) }
@@ -182,8 +179,4 @@ final class NativePriceCheckController {
         areaRect = CGRect(x: cocoa.minX, y: primaryHeight - cocoa.maxY, width: cocoa.width, height: cocoa.height)
     }
 
-    private func keepAnchored() {
-        guard let anchorTop, panel.frame.origin.y + panel.frame.height != anchorTop.y else { return }
-        panel.setFrameTopLeftPoint(anchorTop)
-    }
 }

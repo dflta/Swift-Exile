@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- New look for the notices and the experience tracker. The tracker now shows "Dif", the area level
+  compared with yours, in place of "Over".
+- Fixed: SwiftExile could crash when the price check grew to show trade results.
+
 ## 0.1.5
 
 - SwiftExile shows its own "ready" notice when it finds the game, instead of Exiled Exchange 2's.

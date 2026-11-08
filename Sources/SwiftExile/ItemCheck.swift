@@ -31,8 +31,8 @@ final class ItemCheckController {
     let model = ItemCheckModel()
     private let engine: PriceCheckEngine
     private let panel = PriceCheckPanel()
-    private var anchorTop: CGPoint?
-    private var resizeObserver: NSObjectProtocol?
+    private var anchorTop: CGPoint? { didSet { sizer?.anchorTop = anchorTop } }
+    private var sizer: TopAnchoredSizer!
     private var activationObserver: NSObjectProtocol?
     private var keyMonitor: Any?
     private var cursor: CGPoint = .zero
@@ -66,11 +66,7 @@ final class ItemCheckController {
                 self.hide()
                 self.onPriceCheck(text, self.cursor)
             }))
-        panel.contentViewController = hosting
-
-        resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.keepAnchored() }
-        }
+        sizer = TopAnchoredSizer(panel: panel, hosting: hosting)
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
@@ -129,6 +125,7 @@ final class ItemCheckController {
         let cocoa = ScreenCoordinates.cocoaRect(fromQuartz: frame, primaryHeight: primaryHeight)
         anchorTop = CGPoint(x: cocoa.minX, y: cocoa.maxY)
         panel.setFrameTopLeftPoint(anchorTop!)
+        sizer.apply()
         suspended = false
         panel.orderFrontRegardless()
         panel.makeKey()
@@ -180,11 +177,6 @@ final class ItemCheckController {
 
     private func movedByUser() {
         anchorTop = CGPoint(x: panel.frame.minX, y: panel.frame.maxY)
-    }
-
-    private func keepAnchored() {
-        guard let anchorTop, panel.frame.maxY != anchorTop.y else { return }
-        panel.setFrameTopLeftPoint(anchorTop)
     }
 }
 

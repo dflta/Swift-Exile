@@ -80,7 +80,7 @@ final class NoticeController {
 extension NoticeController.Notice {
     static let ready = Self(title: "SwiftExile", message: "Ready and running in the background")
     static let clipboardWait = Self(title: "Waiting for Wine's clipboard",
-                                    message: "The search goes into the stash in a moment", showsProgress: true)
+                                    message: "It takes about 2 seconds", showsProgress: true)
 }
 
 private struct NoticeView: View {
@@ -88,23 +88,36 @@ private struct NoticeView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if notice.showsProgress {
-                ProgressView().controlSize(.small).frame(width: 28, height: 28)
-            } else {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 40, height: 40)
+            Group {
+                if notice.showsProgress {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(nsImage: NSApp.applicationIconImage).resizable()
+                }
             }
+            .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 2) {
-                Text(notice.title).font(.headline)
-                Text(notice.message).foregroundStyle(.secondary)
+                Text(notice.title).font(.system(size: 13, weight: .bold))
+                Text(notice.message).font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 12)
         .padding(.leading, 12)
-        .padding(.trailing, 18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .environment(\.colorScheme, .dark)
+        .padding(.trailing, 20)
+        .glassBackground(cornerRadius: 20)
         .fixedSize()
+    }
+}
+
+extension View {
+    /// Liquid Glass on macOS 26 and later, a material before it.
+    @ViewBuilder
+    func glassBackground(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+        }
     }
 }

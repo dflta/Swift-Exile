@@ -401,6 +401,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 _ = self.notice.snapshot(.ready, to: URL(fileURLWithPath: "\(folder)/ready-notice.png"))
                 _ = self.notice.snapshot(.clipboardWait, to: URL(fileURLWithPath: "\(folder)/clipboard-wait-notice.png"))
+                for (name, scheme) in [("dark", ColorScheme.dark), ("light", .light)] {
+                    let rows = VStack(alignment: .leading, spacing: 6) {
+                        ForEach([20, 17, 14, 10], id: \.self) { area in
+                            ExperienceTrackerView(model: {
+                                let model = LevelingModel()
+                                model.state = LevelingState(playerLevel: 18, areaLevel: area)
+                                return model
+                            }())
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(white: 0.27))
+                    .environment(\.colorScheme, scheme)
+                    let view = NSHostingView(rootView: rows)
+                    view.setFrameSize(view.fittingSize)
+                    let window = NSWindow(contentRect: NSRect(origin: CGPoint(x: -4000, y: 0), size: view.fittingSize),
+                                          styleMask: [.borderless], backing: .buffered, defer: false)
+                    window.contentView = view
+                    view.layoutSubtreeIfNeeded()
+                    if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                        view.cacheDisplay(in: view.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(folder)/xp-tracker-\(name).png"))
+                    }
+                }
                 print("[snapshot] settings pages saved to \(folder)")
                 Task {
                     let modifiers = await self.mapModifiers()
