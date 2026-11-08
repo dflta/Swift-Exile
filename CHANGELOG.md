@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.4
 
 - **Native map check.** The item check hotkey on a waystone, tablet, or contract shows its
   properties and modifiers. Click a modifier to mark it dangerous, warning, or good; ratings are
@@ -8,6 +8,8 @@
 - **Settings ▸ Map Check:** rate any map modifier ahead of time, with search and "only rated".
   Includes newer tablet modifiers Exiled Exchange 2 doesn't list yet, and modifiers it doesn't
   recognize on a map can still be rated.
+- Fixed: changing a setting in SwiftExile showed Exiled Exchange 2's "Is ready and running in
+  background" pop-up.
 
 ## 0.1.3
 
